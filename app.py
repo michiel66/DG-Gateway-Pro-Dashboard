@@ -101,7 +101,8 @@ def query_voice_status(rows: list[dict]) -> tuple[set[str], bool]:
     return talkers, available
 
 
-def ts_query(host: str, query_port: int, voice_port: int, login: str, password: str) -> dict:
+def ts_query(host: str, query_port: int, voice_port: int, login: str, password: str,
+             include_channels: bool = True) -> dict:
     """Read users/voice flags from server; no audio transferred or microphone opened.
 
     client_flag_talking from clientlist -voice can represent speakers in all
@@ -134,7 +135,9 @@ def ts_query(host: str, query_port: int, voice_port: int, login: str, password: 
             ask("login " + ts_escape(login) + " " + ts_escape(password))
         # ServerQuery cannot represent a normal logged-in TeamSpeak voice client.
         ask("use port=" + str(voice_port))
-        chans = ask("channellist")
+        # The all-channel voice monitor needs only clientlist. Don't require
+        # unrelated channellist permissions when using a restricted read account.
+        chans = ask("channellist") if include_channels else []
         users = ask("clientlist -voice")
         return {"channels": chans, "users": users}
 
@@ -401,7 +404,8 @@ class DashboardState:
         def monitor():
             while not stop.is_set():
                 try:
-                    result = ts_query(SERVER, port, voice_port, login, password)
+                    result = ts_query(SERVER, port, voice_port, login, password,
+                                      include_channels=False)
                     talking, flag_available = query_voice_status(result["users"])
                     if not flag_available:
                         raise QueryError(
@@ -448,6 +452,8 @@ class DashboardState:
         voice_port = int(payload.get("voice_port") or 9987)
         if not (1 <= port <= 65535 and 1 <= voice_port <= 65535):
             raise ValueError("Ongeldige ServerQuery- of voicepoort.")
+        if bool(clean_text(payload.get("login"))) != bool(str(payload.get("password") or "")):
+            raise ValueError("Vul zowel de optionele lees-login als het wachtwoord in, of laat beide leeg.")
         viewer = DirectViewer(self, SERVER)
         # Confirm the native viewer exists BEFORE dropping any existing connection.
         if not viewer_available():
@@ -462,6 +468,7 @@ class DashboardState:
             viewer.start(name)
             self.start_global_monitor(payload)
         except (RuntimeError, OSError, ValueError):
+            viewer.stop()  # Never leak an active TS client if monitor setup fails.
             with self.lock:
                 self.client_viewer = None
             raise
@@ -532,6 +539,8 @@ class DashboardState:
                 self.error = ""
             elif kind == "disconnected":
                 self.global_monitor_stop.set()
+                self.global_monitor_epoch += 1
+                self.global_monitor_enabled = False
                 self.global_monitor_active = False
                 self.global_talking.clear()
                 self.connected = False
@@ -627,6 +636,7 @@ class DashboardState:
                 "active_users": active, "updated_at": self.updated_at,
                 "talk_scope": ("voorbeeld" if mode == "demo"
                                else "hele_server" if mode == "query" and talk_data
+                               else "gedeeltelijk" if monitor_live and self.global_monitor_count < len(users)
                                else "hele_server" if monitor_live
                                else "eigen_kanaal" if mode == "client"
                                else "onbekend"),
@@ -634,6 +644,7 @@ class DashboardState:
                     "enabled": self.global_monitor_enabled if mode == "client" else False,
                     "live": monitor_live,
                     "query_users": self.global_monitor_count if monitor_live else 0,
+                    "visible_users": len(users),
                     "error": self.global_monitor_error if mode == "client" else "",
                     "last_update": self.global_monitor_updated_at if monitor_live else 0,
                     "source": "ServerQuery -voice" if monitor_live else "TeamSpeak client",
