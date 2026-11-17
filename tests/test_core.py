@@ -3,7 +3,9 @@ import socketserver
 import tempfile
 from pathlib import Path
 import threading
+import time
 import unittest
+from unittest.mock import patch
 
 import app
 
@@ -59,6 +61,71 @@ class DGTests(unittest.TestCase):
         self.assertEqual(len(ended["heard"]), 1)
         self.assertEqual(ended["heard"][0]["name"], "DG-103 Michiel")
         self.assertEqual(ended["active_users"], [])
+
+    def test_serverquery_voice_flags_all_channels(self):
+        rows = [
+            {"clid": "5", "cid": "7", "client_nickname": "DG-103 Michiel",
+             "client_type": "0", "client_flag_talking": "0"},
+            {"clid": "6", "cid": "8", "client_nickname": "DG-104 Marcel",
+             "client_type": "0", "client_flag_talking": "1"},
+            {"clid": "99", "cid": "7", "client_nickname": "DashboardView/Test",
+             "client_type": "0", "client_flag_talking": "0"},
+            {"clid": "10", "cid": "8", "client_nickname": "QueryBot",
+             "client_type": "1", "client_flag_talking": "1"},
+        ]
+        talking, available = app.query_voice_status(rows)
+        self.assertTrue(available)
+        self.assertEqual(talking, {"6"})  # Includes a user in OTHER channel
+        self.assertEqual(app.query_voice_status([
+            {"clid": "6", "client_type": "0", "client_nickname": "Marcel",
+             "client_input_muted": "0", "client_is_talker": "1"}
+        ]), (set(), False))  # No inference from mic/talk-permission
+
+    def test_normal_client_plus_global_server_monitor(self):
+        dashboard = app.DashboardState()
+        dashboard.mode = "client"
+        dashboard.client_viewer = object()
+        dashboard.connected = True
+        dashboard.speaker_data = True
+        dashboard.users = [
+            {"id": "3", "name": "DG-103 Ruud", "region": 103, "channel_id": 7, "speaking": False},
+            {"id": "4", "name": "DG-104 Marcel", "region": 104, "channel_id": 8, "speaking": False},
+        ]
+        dashboard.client_channel = 7
+        response = {"channels": [], "users": [
+            {"clid": "3", "cid": "7", "client_nickname": "DG-103 Ruud",
+             "client_type": "0", "client_flag_talking": "0"},
+            {"clid": "4", "cid": "8", "client_nickname": "DG-104 Marcel",
+             "client_type": "0", "client_flag_talking": "1"},
+        ]}
+        def fake_query(*args, **kwargs):
+            self.assertFalse(kwargs.get("include_channels", True))
+            return response
+
+        with patch.object(app, "ts_query", side_effect=fake_query):
+            dashboard.start_global_monitor({"global_monitor": True})
+            for _ in range(100):
+                if dashboard.snapshot()["monitor"]["live"]:
+                    break
+                time.sleep(0.02)
+            got = dashboard.snapshot()
+            self.assertTrue(got["monitor"]["live"])
+            self.assertEqual(got["talk_scope"], "hele_server")
+            self.assertEqual(got["active_users"][0]["name"], "DG-104 Marcel")
+            self.assertTrue(next(g for g in got["groups"] if g["code"] == 104)["active"])
+            # The ordinary same-channel TS3 event MUST NOT hide remote TX.
+            dashboard.handle_client_event(dashboard.client_viewer, {
+                "type": "talkers", "clients": [3],
+            })
+            self.assertEqual(dashboard.snapshot()["active_users"][0]["id"], "4")
+            dashboard.stop_global_monitor()
+            self.assertFalse(dashboard.snapshot()["monitor"]["live"])
+            self.assertEqual(dashboard.snapshot()["talk_scope"], "eigen_kanaal")
+
+        dashboard.global_monitor_count = 1
+        dashboard.global_monitor_updated_at = time.time()
+        dashboard.global_monitor_active = True
+        self.assertEqual(dashboard.snapshot()["talk_scope"], "gedeeltelijk")
 
     def test_normal_team_speak_viewer_only(self):
         from direct_client import DirectViewer, display_nickname
@@ -140,7 +207,7 @@ class DGTests(unittest.TestCase):
                     elif cmd == "channellist":
                         self.wfile.write(b"cid=7 channel_name=Radio\sKanaal|cid=8 channel_name=Algemeen\nerror id=0 msg=ok\n")
                     elif cmd == "clientlist -voice":
-                        self.wfile.write(b"clid=5 cid=7 client_nickname=DG-103\sMichiel client_type=0|clid=6 cid=7 client_nickname=Query client_type=1\nerror id=0 msg=ok\n")
+                        self.wfile.write(b"clid=5 cid=7 client_nickname=DG-103\sMichiel client_type=0 client_flag_talking=0|clid=6 cid=7 client_nickname=Query client_type=1 client_flag_talking=0|clid=7 cid=8 client_nickname=DG-104\sMarcel client_type=0 client_flag_talking=1\nerror id=0 msg=ok\n")
                     else:
                         self.wfile.write(b"error id=256 msg=command\snot\sfound\n")
                     self.wfile.flush()
@@ -153,6 +220,7 @@ class DGTests(unittest.TestCase):
             self.assertEqual(result["channels"][0]["channel_name"], "Radio Kanaal")
             self.assertEqual(result["users"][0]["client_nickname"], "DG-103 Michiel")
             self.assertEqual(result["users"][1]["client_type"], "1")
+            self.assertEqual(app.query_voice_status(result["users"]), ({"7"}, True))
             server.shutdown()
 
 
