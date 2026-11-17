@@ -181,6 +181,17 @@
         </div>
         <p class="warning">ServerQuery op poort 10011 is standaard niet versleuteld. Gebruik alleen beperkte leesrechten; vul geen beheerderswachtwoord in.</p>
       </fieldset>
+      <fieldset class="monitor-fields">
+        <legend>Alternatief: live kanaalbewakers (zonder ServerQuery)</legend>
+        <label class="monitor-toggle">
+          <input id="startObservers" type="checkbox">
+          Extra alleen-kijkenverbindingen voor bezette kanalen toestaan
+        </label>
+        <p>Deze optie maakt maximaal enkele extra <strong>DashboardView/C-kanaal</strong>-gebruikers op TeamSpeak. Elke kanaalbewaker ontvangt alleen spreekstatus, geen geluid. Ze gebruiken wel serverplaatsen en hebben toestemming nodig om kanalen te betreden. Alleen inschakelen als dit van de serverbeheerder mag.</p>
+        <label>Maximaal aantal extra verbindingen
+          <select id="startObserverLimit"><option value="2">2</option><option value="4" selected>4</option><option value="6">6</option><option value="8">8</option></select>
+        </label>
+      </fieldset>
       <button type="submit" class="primary" id="connectClientBtn">Verbinden zonder audio</button>
     </form>
     <form id="monitorForm" class="dialog-view" hidden>
@@ -194,6 +205,17 @@
       </div>
       <p class="warning">Dit werkt alleen als de TeamSpeak-server ServerQuery en het uitlezen van de spreekstatus toestaat. Poort 10011 verstuurt inloggegevens standaard onversleuteld; gebruik hiervoor geen beheerdersaccount.</p>
       <button type="submit" class="primary" id="saveGlobalBtn">Monitoring aanpassen</button>
+      <fieldset class="monitor-fields">
+        <legend>Kanaalbewakers – alternatief bij ontbrekende ServerQuery-rechten</legend>
+        <label class="monitor-toggle"><input id="updateObservers" type="checkbox">
+          Extra gedempte TeamSpeak-kijkers gebruiken voor bezette kanalen
+        </label>
+        <p>Alleen met toestemming van de TeamSpeak-beheerder. Iedere bewaker neemt een gebruikersplaats in, kan zichtbaar zijn op de server en wordt automatisch verwijderd bij stoppen. De kaart kan alleen bezette, toegankelijke kanalen volgen.</p>
+        <label>Maximaal extra kanaalbewakers
+          <select id="updateObserverLimit"><option value="2">2</option><option value="4" selected>4</option><option value="6">6</option><option value="8">8</option></select>
+        </label>
+        <button type="button" class="secondary" id="saveObserverBtn">Kanaalbewakers instellen</button>
+      </fieldset>
       <p id="monitorExplain" class="info-note"></p>
     </form>
     <form id="queryForm" class="dialog-view" hidden>
