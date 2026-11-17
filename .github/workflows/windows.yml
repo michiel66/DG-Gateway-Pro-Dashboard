@@ -1,0 +1,54 @@
+name: Build Windows Viewer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Test and build Windows exe
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Windows viewer project
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Install Windows dashboard dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Check Python code and run unit tests
+        run: |
+          python -m compileall -q app.py
+          python -m unittest discover -s tests -v
+
+      - name: Build Windows .exe (PyInstaller)
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name DG-Gateway-Pro-Dashboard --add-data "ui;ui" --collect-all webview app.py
+          if (-not (Test-Path "dist/DG-Gateway-Pro-Dashboard.exe")) { throw "EXE niet gevonden" }
+
+      - name: Package Windows application and instructions
+        run: |
+          New-Item -ItemType Directory -Force -Path "release/DG-Gateway-Pro-Windows" | Out-Null
+          Copy-Item "dist/DG-Gateway-Pro-Dashboard.exe" "release/DG-Gateway-Pro-Windows/"
+          Copy-Item "README.md" "release/DG-Gateway-Pro-Windows/LEESMIJ.md"
+          Get-FileHash "dist/DG-Gateway-Pro-Dashboard.exe" -Algorithm SHA256 | Format-List | Out-File "release/DG-Gateway-Pro-Windows/SHA256.txt"
+
+      - name: Upload Windows exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: DG-Gateway-Pro-Windows
+          path: release/DG-Gateway-Pro-Windows/
+          retention-days: 90
+          if-no-files-found: error
