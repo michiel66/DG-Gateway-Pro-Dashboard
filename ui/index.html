@@ -30,11 +30,12 @@
     <div class="modes" role="group" aria-label="Verbindingsmodus">
       <button class="mode-chip active" data-mode="demo">Voorbeeld</button>
       <button class="mode-chip" data-mode="android">Met Android</button>
-      <button class="mode-chip" data-mode="query">TeamSpeak direct</button>
+      <button class="mode-chip" data-mode="client">TeamSpeak direct</button>
+      <button class="mode-chip" data-mode="query">ServerQuery (beheer)</button>
     </div>
     <span class="toolbar-note" id="sourceNote">VOORBEELDGEGEVENS — nog geen live koppeling</span>
     <div class="channel-controls" id="channelControls" hidden>
-      <label for="channelSelect">Kanaal</label>
+      <label for="channelSelect" id="channelLabel">Kanaal</label>
       <select id="channelSelect"><option value="0">Alle kanalen</option></select>
     </div>
   </div>
@@ -134,7 +135,8 @@
     <div class="dialog-tabs" role="group" aria-label="Kies methode">
       <button data-dialog-tab="demo">Voorbeeld</button>
       <button data-dialog-tab="android">Met Android</button>
-      <button data-dialog-tab="query">TeamSpeak direct</button>
+      <button data-dialog-tab="client">TeamSpeak direct</button>
+      <button data-dialog-tab="query">ServerQuery (beheer)</button>
     </div>
     <div id="dialogDemo" class="dialog-view">
       <p>Bekijk eerst ons gekozen Nederland-dashboard. <strong>Dit zijn voorbeeldgegevens, geen echte TeamSpeak-gebruikers of transmissies.</strong></p>
@@ -148,8 +150,21 @@
       <div class="info-note">Voor later: beide apparaten op hetzelfde wifi-netwerk, versleutelde HTTPS-verbinding en eenmalige code. Koppelstatus wordt niet gesimuleerd.</div>
       <button class="primary" id="activateAndroid">Android-koppelmodus openen</button>
     </div>
+    <form id="clientForm" class="dialog-view" hidden>
+      <p>De pc verbindt rechtstreeks met <strong>heerlen.mijnts3.nl</strong> als een gewone TeamSpeak-client, zonder ServerQuery of geïnstalleerde TeamSpeak-software. Er wordt <strong>geen microfoon geopend, geen geluid afgespeeld en nooit audio verzonden.</strong></p>
+      <div class="form-grid">
+        <label>Je naam (maximaal 16 tekens)
+          <input id="viewerName" placeholder="Bijvoorbeeld Michiel" maxlength="16" autocomplete="off" required>
+        </label>
+        <label>TeamSpeak-naam op de server
+          <input value="DashboardView/[jouw naam]" readonly aria-label="TeamSpeak-naamvoorbeeld">
+        </label>
+      </div>
+      <p class="info-note">Na verbinden kun je bovenaan een TeamSpeak-kanaal kiezen. De Nederlandkaart toont echte spreekactiviteit die de client in zijn gekozen kanaal ontvangt. Andere kanalen zijn zichtbaar in de gebruikerslijst, maar worden niet allemaal tegelijk afgeluisterd.</p>
+      <button type="submit" class="primary" id="connectClientBtn">Verbinden zonder audio</button>
+    </form>
     <form id="queryForm" class="dialog-view" hidden>
-      <p>Deze modus leest uitsluitend met toestemming van de beheerder via TeamSpeak 3 <strong>ServerQuery</strong> gebruikers en kanalen uit. Het is geen normale voice-client; er is geen geluid of microfoon.</p>
+      <p>Optionele beheerdermodus. Leest gebruikers via <strong>ServerQuery</strong> met toegangsrechten van de serverbeheerder; er verschijnt geen normale TeamSpeak-viewergebruiker. Voor de meeste gebruikers is <strong>TeamSpeak direct</strong> de juiste optie.</p>
       <div class="form-grid">
         <label>Weergavenaam<input id="displayName" placeholder="Michiel" maxlength="40" autocomplete="off"></label>
         <label>TeamSpeak-server<input id="queryHost" value="heerlen.mijnts3.nl" required></label>
