@@ -28,6 +28,12 @@ jobs:
           python-version: "3.12"
           architecture: x64
 
+      - name: Herstel de gecomprimeerde kaartpreview
+        shell: pwsh
+        run: |
+          python -c "from pathlib import Path; import base64; p=Path('demo/assets/nl-blue-background.jpg.base64'); img=base64.b64decode(p.read_text().strip(), validate=True); assert img[:3] == bytes.fromhex('ffd8ff') and img[-2:] == bytes.fromhex('ffd9'); Path('demo/assets/nl-blue-background.jpg').write_bytes(img)"
+          if (-not (Test-Path "demo/assets/nl-blue-background.jpg")) { throw "Achtergrond niet gedecodeerd" }
+
       - name: Controleer demo code en 12 provincies
         shell: pwsh
         run: |
