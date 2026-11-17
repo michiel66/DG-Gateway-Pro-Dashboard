@@ -23,7 +23,10 @@ CALLSIGN_RE = re.compile(r"^[^\x00-\x1f\x7f]{1,16}$")
 
 def display_nickname(user_name: str) -> str:
     """Always identify the view-only client as such; cannot impersonate a DG member."""
-    name = " ".join(str(user_name or "").strip().split())
+    raw = str(user_name or "")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in raw):
+        raise ValueError("Gebruikersnaam bevat ongeldige tekens.")
+    name = " ".join(raw.strip().split())
     if not CALLSIGN_RE.fullmatch(name):
         raise ValueError("Vul een gebruikersnaam van 1 tot 16 tekens in.")
     if any(c in name for c in "\\\n\r"):
