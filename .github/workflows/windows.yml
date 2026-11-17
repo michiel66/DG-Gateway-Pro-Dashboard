@@ -58,7 +58,7 @@ jobs:
 
       - name: Check Python code and run unit tests
         run: |
-          python -m compileall -q app.py direct_client.py
+          python -m compileall -q app.py direct_client.py channel_observers.py
           node --check ui/app.js
           python -m unittest discover -s tests -v
 
