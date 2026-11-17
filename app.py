@@ -287,6 +287,7 @@ class DashboardState:
             self.generation += 1
 
     def connect_query(self, payload: dict):
+        self.stop_global_monitor()
         self.stop_client()
         host = clean_text(payload.get("host") or SERVER, 200)
         if not re.fullmatch(r"[a-zA-Z0-9.:_-]{1,200}", host):
@@ -329,37 +330,124 @@ class DashboardState:
                             "name": name,
                             "region": region_for(name),
                             "channel_id": int(row.get("cid") or 0),
-                            "speaking": None,  # ServerQuery -voice is not real-time talking status.
+                            "speaking": None,  # Filled only after valid -voice flags are verified.
                         })
                     channels = [
                         {"id": int(row.get("cid") or 0), "name": clean_text(row.get("channel_name"), 80)}
                         for row in result["channels"] if row.get("cid", "").isdigit()
                     ]
+                    talking, valid_flags = query_voice_status(result["users"])
                     with self.lock:
                         if gen != self.generation or self.mode != "query":
                             return
                         self.users = users
                         self.channels = channels
-                        self.speaker_data = False
+                        self.speaker_data = valid_flags
+                        if valid_flags:
+                            self._record_speakers_locked(talking)
+                        else:
+                            self.speaking_started.clear()
                         self.connected = True
                         self.updated_at = time.time()
-                        self.error = ""
+                        self.error = "" if valid_flags else "ServerQuery: deze server geeft geen spreekstatus (-voice) terug."
+
                 except Exception as exc:
                     with self.lock:
                         if gen != self.generation:
                             return
                         self.connected = False
                         self.error = clean_text(exc, 200)
-                stop.wait(5.0)
+                stop.wait(2.0)
 
         self.query_thread = threading.Thread(target=loop, daemon=True, name="serverquery-reader")
         self.query_thread.start()
 
 
+
+    def start_global_monitor(self, payload: dict):
+        """Supplement normal TeamSpeak client with authorised server-wide voice flags.
+
+        Try anonymous ServerQuery on the same Heerlen server first. The
+        server's read-only permissions determine whether all channels can be
+        monitored. Credentials are optional and held only in RAM.
+        """
+        enabled = payload.get("global_monitor", True) is not False
+        port = int(payload.get("query_port") or 10011)
+        voice_port = int(payload.get("voice_port") or 9987)
+        if not (1 <= port <= 65535 and 1 <= voice_port <= 65535):
+            raise ValueError("Ongeldige ServerQuery- of voicepoort.")
+        login = clean_text(payload.get("login"), 100)
+        password = str(payload.get("password") or "")
+        if bool(login) != bool(password):
+            raise ValueError("Vul zowel de ServerQuery-login als het wachtwoord in, of laat beide leeg.")
+        self.stop_global_monitor()
+        with self.lock:
+            if self.mode != "client":
+                raise ValueError("Serverbrede monitoring werkt in TeamSpeak direct.")
+            epoch = self.global_monitor_epoch
+            self.global_monitor_enabled = enabled
+            self.global_monitor_error = (
+                "Serverbrede RX/TX is uitgeschakeld." if not enabled
+                else "Verbinding met ServerQuery wordt gecontroleerd..."
+            )
+            self.global_monitor_count = 0
+            if not enabled:
+                self._record_speakers_locked({str(uid) for uid in self.client_talking})
+                return
+            self.global_monitor_config = (SERVER, port, voice_port, login, password)
+            stop = threading.Event()
+            self.global_monitor_stop = stop
+
+        def monitor():
+            while not stop.is_set():
+                try:
+                    result = ts_query(SERVER, port, voice_port, login, password)
+                    talking, flag_available = query_voice_status(result["users"])
+                    if not flag_available:
+                        raise QueryError(
+                            "ServerQuery -voice geeft geen client_flag_talking terug. "
+                            "Vraag een leesaccount met toegang tot alle kanalen."
+                        )
+                    with self.lock:
+                        if (self.mode != "client" or self.global_monitor_epoch != epoch
+                                or not self.global_monitor_enabled):
+                            return
+                        self.global_monitor_active = True
+                        self.global_monitor_updated_at = time.time()
+                        self.global_monitor_count = sum(
+                            1 for row in result["users"] if row.get("client_type") == "0"
+                            and not str(row.get("client_nickname", "")).lower().startswith("dashboardview/")
+                        )
+                        self.global_talking = talking
+                        self.global_monitor_error = ""
+                        self._record_speakers_locked(talking)
+                except (OSError, QueryError, ValueError, TimeoutError) as exc:
+                    with self.lock:
+                        if self.mode != "client" or self.global_monitor_epoch != epoch:
+                            return
+                        self.global_monitor_active = False
+                        self.global_talking.clear()
+                        self.global_monitor_error = (
+                            "Geen toegang tot de serverbrede spreekstatus: "
+                            + clean_text(exc, 180)
+                            + " (alleen eigen kanaal blijft beschikbaar)"
+                        )
+                        self._record_speakers_locked({str(uid) for uid in self.client_talking})
+                stop.wait(2.0 if self.global_monitor_active else 6.0)
+
+        self.global_monitor_thread = threading.Thread(
+            target=monitor, daemon=True, name="dg-server-wide-voice-flags"
+        )
+        self.global_monitor_thread.start()
+
     def connect_client(self, payload: dict):
         """A real, muted TS3 client; no TeamSpeak installation or ServerQuery password."""
         name = clean_text(payload.get("display_name"), 16)
         display_nickname(name)  # Validate before changing the existing state.
+        port = int(payload.get("query_port") or 10011)
+        voice_port = int(payload.get("voice_port") or 9987)
+        if not (1 <= port <= 65535 and 1 <= voice_port <= 65535):
+            raise ValueError("Ongeldige ServerQuery- of voicepoort.")
         viewer = DirectViewer(self, SERVER)
         # Confirm the native viewer exists BEFORE dropping any existing connection.
         if not viewer_available():
@@ -372,6 +460,7 @@ class DashboardState:
             self.query_config = None
         try:
             viewer.start(name)
+            self.start_global_monitor(payload)
         except (RuntimeError, OSError, ValueError):
             with self.lock:
                 self.client_viewer = None
