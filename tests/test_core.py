@@ -60,6 +60,57 @@ class DGTests(unittest.TestCase):
         self.assertEqual(ended["heard"][0]["name"], "DG-103 Michiel")
         self.assertEqual(ended["active_users"], [])
 
+    def test_normal_team_speak_viewer_only(self):
+        from direct_client import DirectViewer, display_nickname
+        self.assertEqual(display_nickname("Michiel"), "DashboardView/Michiel")
+        self.assertEqual(display_nickname(" Michiel "), "DashboardView/Michiel")
+        for invalid in ("", "x" * 17, "Ab\nCd"):
+            with self.assertRaises(ValueError):
+                display_nickname(invalid)
+
+        viewer = DirectViewer(app.DashboardState())
+        for forbidden in ("ptt_on", "sendAudio test", "muteinput 0", "chat hello", "switch 0"):
+            with self.assertRaises(ValueError):
+                viewer.send(forbidden)
+
+    def test_normal_ts3_events_drive_real_dg_markers(self):
+        dashboard = app.DashboardState()
+        dashboard.set_mode("client")
+        viewer = object()
+        dashboard.client_viewer = viewer
+        dashboard.handle_client_event(viewer, {
+            "type": "connected", "server_name": "Heerlen", "identity": "secret"
+        })
+        dashboard.handle_client_event(viewer, {
+            "type": "channels",
+            "own_client_id": 99,
+            "channels": [{"id": 7, "name": "Kanaal 7"}, {"id": 8, "name": "Kanaal 8"}],
+            "clients": [
+                {"id": 99, "channel": 7, "name": "DashboardView/Michiel", "is_query": False},
+                {"id": 3, "channel": 7, "name": "DG-103 Ruud", "is_query": False},
+                {"id": 4, "channel": 8, "name": "DG-104 Marcel", "is_query": False},
+                {"id": 5, "channel": 7, "name": "ServerQuery", "is_query": True},
+            ],
+        })
+        first = dashboard.snapshot()
+        self.assertTrue(first["connected"])
+        self.assertTrue(first["speaker_data"])
+        self.assertEqual(first["selected_channel"], 7)
+        self.assertEqual(first["all_users_count"], 2)  # Viewer and query bot excluded
+        self.assertEqual(first["active_users"], [])
+        dashboard.handle_client_event(viewer, {"type": "talkers", "clients": [3, 99]})
+        active = dashboard.snapshot()
+        self.assertEqual(len(active["active_users"]), 1)
+        self.assertEqual(active["active_users"][0]["name"], "DG-103 Ruud")
+        self.assertTrue(next(g for g in active["groups"] if g["code"] == 103)["active"])
+        self.assertFalse(next(g for g in active["groups"] if g["code"] == 104)["active"])
+        dashboard.handle_client_event(viewer, {"type": "talkers", "clients": []})
+        ended = dashboard.snapshot()
+        self.assertEqual(ended["active_users"], [])
+        self.assertEqual(ended["heard"][0]["name"], "DG-103 Ruud")
+        dashboard.handle_client_event(viewer, {"type": "disconnected", "reason": "Test klaar"})
+        self.assertFalse(dashboard.snapshot()["connected"])
+
     def test_tls_certificate_has_fingerprint(self):
         from cryptography import x509
         from cryptography.hazmat.primitives import serialization
