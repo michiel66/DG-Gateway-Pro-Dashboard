@@ -172,15 +172,36 @@ function render(s){
   putText("modeName",s.mode==="demo"?"VOORBEELD":s.mode==="android"?(s.connected?"GEKOPPELD":"WACHT OP ANDROID"):s.mode==="client"?(s.connected?"LIVE · TEAMSPEAK":"VERBINDEN..."):(s.connected?"LIVE · QUERY":"NIET VERBONDEN"));
   $("modeDot").style.background=s.mode==="demo"?"#ffc44c":s.connected?"#50fb84":"#fa4e55";
   $("modeDot").style.boxShadow=s.mode==="demo"?"0 0 11px #ffc44c":s.connected?"0 0 11px #50fb84":"0 0 10px #fa4e55";
+  const monitor=s.monitor||{};
+  const serverWide=s.talk_scope==="hele_server";
   const msg=s.error||(
       s.mode==="demo"?"VOORBEELDGEGEVENS — dit is geen live TeamSpeak-verbinding":
       s.mode==="android"?(s.connected?"Android stuurt echte ontvangergegevens":"Android-koppeling vereist een toekomstige app-update"):
-      s.mode==="client"?(s.connected?"ECHTE TEAMSPEAK-VERBINDING · geen audio via Windows":"Niet verbonden met TeamSpeak"):
-      s.connected?"SERVERQUERY VERBONDEN — spreekstatus niet beschikbaar":"Niet verbonden met ServerQuery"
+      s.mode==="client"?(s.connected?(serverWide?
+          "LIVE · SERVERBREDE RX/TX VIA SERVERQUERY · geen pc-audio":
+          "LIVE · alleen RX/TX eigen TeamSpeak-kanaal"):"Niet verbonden met TeamSpeak"):
+      s.connected?(serverWide?"SERVERQUERY LIVE · ALLE TOEGANKELIJKE KANALEN":
+                   "SERVERQUERY VERBONDEN · spreekstatus ontbreekt"):"Niet verbonden met ServerQuery"
   );
   putText("sourceNote",msg);
   putText("connectionState",msg);
-  putText("legendFoot",s.speaker_data?"Groen = gemelde spreekstatus door gekoppelde bron":"ServerQuery kan geen sprekers detecteren; geen fictieve groenverlichting.");
+  $("monitorTools").hidden=s.mode!=="client";
+  const monText=monitor.live?
+    "SERVERBREDE RX/TX · "+(monitor.query_users||0)+" gebruikers gecontroleerd":
+    monitor.enabled?"ALLEEN EIGEN KANAAL · MONITOR NIET BESCHIKBAAR":
+                    "ALLEEN EIGEN KANAAL · MONITOR UIT";
+  putText("monitorStatus",monText);
+  $("monitorStatus").classList.toggle("online",Boolean(monitor.live));
+  $("monitorStatus").title=monitor.live?
+    "ServerQuery -voice leest elke 2 seconden de toegankelijke kanalen.":
+    (monitor.error||"RX/TX is beperkt tot het geselecteerde kanaal.");
+  if(s.mode==="client") putText("monitorExplain",monitor.error||
+    (monitor.live?"Serverbrede spreekstatus is actief. Polling elke 2 seconden.":
+     "Automatisch proberen zonder login; als de server geen toegang geeft, vraag leesrechten."));
+  putText("legendFoot",serverWide?
+    "Groen = echte spreekstatus uit toegankelijke TeamSpeak-kanalen (ServerQuery -voice)":
+    s.speaker_data?"Groen = spreekstatus in het waargenomen TeamSpeak-kanaal":
+                   "Geen spreekstatus beschikbaar; geen fictieve groenverlichting.");
   $("channelControls").hidden=!["query","client"].includes(s.mode)||!s.connected;
   putText("channelLabel",s.mode==="client"?"TS-kanaal kiezen":"Kanaalfilter");
   document.querySelectorAll(".mode-chip").forEach(b=>b.classList.toggle("active",b.dataset.mode===s.mode));
@@ -192,7 +213,9 @@ function render(s){
   if(pair.qr){$("qrImage").src=pair.qr;$("qrImage").hidden=false}else{$("qrImage").hidden=true}
   $("mapCaption").textContent = s.demo?
     "SCHEMATISCHE KAART · VOORBEELDGEGEVENS · GEEN ECHTE TRANSMISSIE":
-    "Schematische provincies · DG-groepen zijn virtuele TeamSpeak-regio's";
+    serverWide?"SERVERBREDE RX/TX · 2 SEC PEILING · ALLEEN TOEGANKELIJKE KANALEN":
+    s.mode==="client"?"RX/TX alleen in huidig kanaal · stel Serverbrede RX/TX in":
+                       "Schematische provincies · DG-groepen zijn virtuele TeamSpeak-regio's";
   if(firstLoad){ firstLoad=false; }
 }
 async function request(path,data){
@@ -221,7 +244,9 @@ function dialogTab(tab){
   $("dialogDemo").hidden=tab!=="demo";
   $("dialogAndroid").hidden=tab!=="android";
   $("clientForm").hidden=tab!=="client";
+  $("monitorForm").hidden=tab!=="monitor";
   $("queryForm").hidden=tab!=="query";
+  $("monitorTab").hidden=lastStatus?.mode!=="client";
   document.querySelectorAll(".dialog-tabs button").forEach(b=>b.classList.toggle("active",b.dataset.dialogTab===tab));
   $("dialogError").hidden=true;
 }
@@ -234,7 +259,8 @@ function wireEvents(){
     else showDialog(b.dataset.mode)
   }));
   document.querySelectorAll(".dialog-tabs button").forEach(b=>b.addEventListener("click",()=>dialogTab(b.dataset.dialogTab)));
-  $("settingsBtn").addEventListener("click",()=>showDialog(lastStatus?.mode||"demo"));
+  $("settingsBtn").addEventListener("click",()=>showDialog(lastStatus?.mode==="client"?"monitor":lastStatus?.mode||"demo"));
+  $("monitorCfgBtn").addEventListener("click",()=>showDialog("monitor"));
   $("modeBtn").addEventListener("click",()=>showDialog(lastStatus?.mode||"demo"));
   $("closeDialog").addEventListener("click",closeDialog);
   $("dialogBackdrop").addEventListener("click",e=>{if(e.target===$("dialogBackdrop"))closeDialog()});
@@ -249,10 +275,34 @@ function wireEvents(){
     e.preventDefault();
     $("connectClientBtn").disabled=true;
     try{
-      await request("/api/connect-client",{display_name:$("viewerName").value});
+      await request("/api/connect-client",{
+        display_name:$("viewerName").value,
+        global_monitor:$("startGlobalRx").checked,
+        query_port:Number($("clientQueryPort").value||10011),
+        voice_port:Number($("clientVoicePort").value||9987),
+        login:$("clientQueryLogin").value,
+        password:$("clientQueryPassword").value
+      });
+      $("clientQueryPassword").value="";
       regionFilter=0;closeDialog();await poll();
     }catch(err){dialogError(err)}
     finally{$("connectClientBtn").disabled=false}
+  });
+  $("monitorForm").addEventListener("submit",async e=>{
+    e.preventDefault();
+    $("saveGlobalBtn").disabled=true;
+    try{
+      await request("/api/global-monitor",{
+        global_monitor:$("updateGlobalRx").checked,
+        query_port:Number($("monitorQueryPort").value||10011),
+        voice_port:Number($("monitorVoicePort").value||9987),
+        login:$("monitorQueryLogin").value,
+        password:$("monitorQueryPassword").value
+      });
+      $("monitorQueryPassword").value="";
+      closeDialog();await poll();
+    }catch(err){dialogError(err)}
+    finally{$("saveGlobalBtn").disabled=false}
   });
   $("queryForm").addEventListener("submit",async e=>{
     e.preventDefault();
