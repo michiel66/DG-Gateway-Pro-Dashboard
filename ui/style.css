@@ -284,3 +284,11 @@ select{border-radius:6px;background:#071f39;border:1px solid #258ac5;color:#eefa
   .monitor-tools{width:100%;justify-content:center;flex-direction:row}
   .monitor-tools .monitor-status{max-width:48%}
 }
+
+.monitor-status.partial{
+  color:#ffe7b2;background:#593a11;border-color:#ffbb4a;box-shadow:0 0 7px #6a4918;
+}
+.onair-other{margin-top:8px;border-top:1px solid #317e50;padding-top:8px;color:#d4f6e4;font-size:12px}
+.onair-other strong{display:block;margin-bottom:3px;color:#74ffab}
+.onair-other div{padding:3px 5px;border-bottom:1px solid #1e5240;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dialog-tabs{flex-wrap:wrap}
