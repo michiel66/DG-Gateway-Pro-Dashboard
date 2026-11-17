@@ -122,7 +122,8 @@ class ChannelObservers:
             self.fail_until = {}
             self.fail_messages = {}
         self.thread = threading.Thread(
-            target=self._run, daemon=True, name="dg-channel-observers"
+            target=self._run, args=(self.stopping,),
+            daemon=True, name="dg-channel-observers"
         )
         self.thread.start()
 
@@ -157,8 +158,8 @@ class ChannelObservers:
         # Stable priority: most people first, then lowest channel number.
         return sorted(occupancy, key=lambda cid: (-occupancy[cid], cid)), own_channel
 
-    def _run(self):
-        while not self.stopping.is_set():
+    def _run(self, stop):
+        while not stop.is_set():
             targets, own = self._targets()
             desired = set(targets[:self.limit])
             to_stop = []
@@ -196,7 +197,7 @@ class ChannelObservers:
                     to_start.stop()
             if to_stop or to_start:
                 self.notify()
-            self.stopping.wait(1.0)
+            stop.wait(1.0)
 
     def collect(self):
         with self.lock:
