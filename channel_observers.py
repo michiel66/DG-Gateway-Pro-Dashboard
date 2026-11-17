@@ -64,6 +64,14 @@ class ChannelObserver:
                         self.ready = True
                         changed = True
                     self.error = ""
+                elif own_channel and self.ready:
+                    # A channel owner can move/kick an observer. Do not continue
+                    # counting it as a live remote-channel receiver.
+                    self.ready = False
+                    self.failed = True
+                    self.talking.clear()
+                    self.error = "Kanaalbewaker is uit het gevolgde kanaal verwijderd."
+                    changed = True
                 elif own_channel and not self.join_requested:
                     self.join_requested = True
                     self.join_started = time.monotonic()
