@@ -12,6 +12,8 @@
 - **Kanaalkeuze:** het dashboard kan zijn eigen `DashboardView/naam`-client naar een gekozen TeamSpeak-kanaal verplaatsen. Zonder extra rechten ziet de client alleen spreekactiviteit in zijn eigen kanaal.
 - **Nieuw: serverbrede RX/TX-monitor:** naast de normale client probeert de Windows-app elke circa 2 seconden via TeamSpeak ServerQuery `clientlist -voice` de daadwerkelijke `client_flag_talking` van gebruikers in **alle toegankelijke TeamSpeak-kanalen** te lezen. Hiervoor is geen geluid of microfoon nodig. Als lezen zonder inlog niet mag, kun je in het dashboard optioneel poort en een beperkt ServerQuery-leesaccount opgeven. Bij succes krijgen alle gelijktijdige sprekers een groene regiomarker, ongeacht hun kanaal, en verschijnen in Last Heard.
 - **Eerlijke monitoringstatus:** bovenaan wordt zichtbaar of serverbrede RX/TX werkt, of de server slechts een deel van de gebruikers vrijgeeft, of alleen het eigen kanaal gevolgd kan worden. Dit is afhankelijk van de rechten op de Heerlen-server. De app verzint geen serverbrede spreekstatus.
+- **Alternatief zonder ServerQuery: optionele kanaalbewakers:** na uitdrukkelijk aanvinken maakt Windows een extra **gedempte TeamSpeak-kijkverbinding per bezet kanaal**, maximaal 2, 4, 6 of 8 verbindingen. Ze heten herkenbaar `DashboardView/C<kanaal-ID>`, gebruiken geen microfoon, geluid, PTT of opname en registreren echte sprekers in het kanaal waar ze mogen zitten. Ze gebruiken wel gewone TeamSpeak-serverplaatsen en kunnen door de serverbeheerder worden geweigerd. De bewakers stoppen bij uitschakelen of afsluiten en worden niet gestart als ServerQuery al actuele sprekersgegevens levert.
+- **Eerlijke monitoringstatus:** bovenaan wordt zichtbaar of serverbrede RX/TX werkt, hoeveel **bezette zichtbare kanalen** werkelijk door kanaalbewakers worden gevolgd, of alleen het eigen kanaal waarneembaar is. Privékanalen zonder toegangsrechten kunnen nooit worden beloofd. De app verzint geen live RX/TX.
 - **Nederlandkaart:** twaalf virtuele regio's DG-100 t/m DG-111, plus DG-999 Overige. DG-103 is Zuid-Holland. Realtime spreekactiviteit wordt groen; Last Heard wordt alleen opgebouwd uit werkelijk gedetecteerde spreekevents.
 - **Fullscreen:** de donkere neon-/zilverstijl past zich automatisch aan de schermgrootte aan.
 - **Voorbeeld:** een duidelijk gemarkeerde demonstratiemodus met fictieve gegevens om de uitstraling te bekijken.
@@ -22,7 +24,7 @@
 
 De huidige [TS-Heerlen-pc](https://github.com/michiel66/TS-Heerlen-pc) Windows-app bouwt de WebSpeak3-protocolconnector vanaf exact commit `c2b52b323d2ef10e388b2b600444a98390c5cc7a`. Dit dashboard gebruikt **dezelfde vastgepinde upstream-versie**. Alleen de audio-PCM-uitvoer wordt uitgeschakeld; verbinding, users, channels, talkers en kanaalwissel blijven beschikbaar. Dit project voert **geen PTTConnect-UI/audio** uit.
 
-**Belangrijke grens:** de gewone TeamSpeak-client kan niet zelfstandig naar alle kanalen luisteren. De extra ServerQuery-uitlezing werkt alleen als de server de poort, `clientlist -voice`, en voldoende rechten beschikbaar stelt. Sommige beheerders beperken de zichtbaarheid per kanaal. Het is daarom niet mogelijk alle kanalen te garanderen zonder toestemming of ondersteuning van de serverbeheerder. De polling van circa 2 seconden kan ultrakorte PTT-uitzendingen missen; de duur in Last Heard is een benadering. De Windows-app speelt of registreert nog steeds geen audio.
+**Belangrijke grens:** één gewone TeamSpeak-client kan niet de sprekers van alle kanalen horen. Voor werkelijk serverbrede monitoring is dus óf een ServerQuery-leesaccount óf één extra normale, gedempte kijkclient per te volgen bezet kanaal nodig. De kanaalbewakers zijn uitsluitend op verzoek actief, verbruiken gebruikersplaatsen en zijn alleen toegestaan waar de serverbeheerder toestemming voor geeft. Maximaal **8 extra kijkers** voorkomt onbedoelde overbelasting; bij meer bezette kanalen toont het dashboard dat de dekking slechts gedeeltelijk is. Privé-/wachtwoordkanalen en afgeschermde gebruikers blijven afhankelijk van serverrechten. ServerQuery peilt ongeveer iedere 2 seconden en kan korte uitzendingen missen; de directe kanaalbewakers werken op de echte TeamSpeak-spreekevents. De Windows-app speelt of registreert geen audio.
 
 ## Download Windows .exe
 
@@ -38,10 +40,11 @@ Op Windows 10 of 11 is de **Microsoft Edge WebView2 Runtime** nodig. Die is op d
 4. Klik **Verbinden zonder audio**. Je verschijnt op de TeamSpeak-server als `DashboardView/Michiel`. Er is geen ServerQuery-account nodig.
 5. De Windows-app probeert automatisch **Serverbrede RX/TX** via ServerQuery, terwijl `DashboardView/Michiel` gewoon met TeamSpeak verbonden blijft.
 6. Bovenaan zie je **Serverbrede RX/TX** wanneer de server toestemming geeft. Bijvoorbeeld: `DG-103 Ruud` in kanaal 7 én `DG-104 Marcel` in kanaal 8 laten twee verschillende regio's tegelijk groen oplichten. Ook verschijnen de namen in Last Heard wanneer het zenden stopt.
-7. Zie je **Alleen eigen kanaal**? Klik **RX/TX alle kanalen ⚙**. Controleer ServerQuery-poort (meestal 10011) en, indien nodig, vul gegevens in van een beperkt **alleen-lezen** ServerQuery-account dat de serverbeheerder voor je heeft toegestaan.
-8. Het gewone TS-kanaal kun je bovenaan nog steeds kiezen, maar dit is niet nodig om van kanaal te wisselen wanneer serverbrede monitoring lukt. Je pc hoort niets en kan niet praten.
-9. Als de melding **Gedeeltelijke RX/TX** verschijnt, kan het ServerQuery-account minder gebruikers zien dan de gewone TeamSpeak-client. Vraag de beheerder om voldoende leesrechten; toon alleen werkelijk beschikbare spreekstatus.
-10. Via **Met Android** zie je de toekomstige QR-koppeling. Hiervoor is later een Android-update vereist.
+7. Zie je **Alleen eigen kanaal**? Klik **RX/TX alle kanalen ⚙**. Controleer eerst ServerQuery-poort (meestal 10011) en een toegestaan leesaccount.
+8. Als de server geen ServerQuery-toegang geeft, kun je onder dezelfde instellingen **Kanaalbewakers** expliciet aanzetten, mits de serverbeheerder dat goedvindt. Kies maximaal 2–8 extra verbindingen. De app verdeelt deze over de bezette, zichtbare kanalen en toont het aantal werkelijk gevolgde kanalen. Je hoeft zelf niet voortdurend van kanaal te wisselen.
+9. Het gewone TS-kanaal kun je bovenaan nog steeds kiezen, maar dit is niet nodig om van kanaal te wisselen wanneer serverbrede monitoring lukt. Je pc hoort niets en kan niet praten.
+10. Als de melding **Gedeeltelijke RX/TX** verschijnt, kan het ServerQuery-account minder gebruikers zien dan de gewone TeamSpeak-client. Vraag de beheerder om voldoende leesrechten; toon alleen werkelijk beschikbare spreekstatus.
+11. Via **Met Android** zie je de toekomstige QR-koppeling. Hiervoor is later een Android-update vereist.
 
 ## Windows-beveiliging en privacy
 
@@ -51,6 +54,7 @@ De Windows viewer slaat de door WebSpeak3 uitgegeven TeamSpeak-identiteit lokaal
 
 - `app.py`: lokale API, echte TeamSpeak-gebruikers en RX-status, automatische serverbrede `clientlist -voice`-polling met eerlijke kanaaldekking en optionele leesrechten, beveiligde LAN-ontvanger en Windows-start.
 - `direct_client.py`: start de vastgepinde normale WebSpeak3 TS3-connector als gedempte Windows-kijkclient; verwerkt uitsluitend users, channels en talkers.
+- `channel_observers.py`: optionele, langzaam opgestarte extra kanaalbewakers voor maximaal 8 bezette zichtbare TS3-kanalen. Met aparte identiteiten, join-timeout, retry-cooldown en volledige afsluitcontrole.
 - `scripts/patch_webspeak_viewer.py`: blokkeert PCM-uitvoer vanuit WebSpeak3 zonder de sprekersdetectie uit te schakelen.
 - `ui/index.html`, `ui/style.css`, `ui/app.js`: responsief Nederland-dashboard met schematische provinciecontouren, geen externe CDNs of tracking.
 - `.github/workflows/windows.yml`: Windows 64-bit PyInstaller testbuild, met de officiële WebSpeak3-connector ingebouwd.
