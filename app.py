@@ -87,8 +87,27 @@ class QueryError(Exception):
     pass
 
 
+def query_voice_status(rows: list[dict]) -> tuple[set[str], bool]:
+    """True talking flags from TS3 ServerQuery, never mic-enabled or 'is_talker'.
+
+    Some servers omit this flag or permission-scope the result. In that case
+    return available=False instead of showing made-up network-wide TX.
+    """
+    real = [r for r in rows if r.get("client_type") == "0"
+            and not str(r.get("client_nickname", "")).lower().startswith("dashboardview/")]
+    available = bool(real) and all("client_flag_talking" in row for row in real)
+    talkers = {str(row["clid"]) for row in real if row.get("client_flag_talking") == "1"
+               and "clid" in row} if available else set()
+    return talkers, available
+
+
 def ts_query(host: str, query_port: int, voice_port: int, login: str, password: str) -> dict:
-    """One short-lived ServerQuery read: cannot send/receive TS voice or detect talk activity."""
+    """Read users/voice flags from server; no audio transferred or microphone opened.
+
+    client_flag_talking from clientlist -voice can represent speakers in all
+    channels the query account is allowed to inspect. Never infer actual
+    talking from client_input_muted or client_is_talker.
+    """
     with socket.create_connection((host, query_port), timeout=8.0) as sock:
         sock.settimeout(8.0)
         stream = sock.makefile("rwb", buffering=0)
@@ -183,6 +202,16 @@ class DashboardState:
         self.client_talking = set()
         self.client_own_id = 0
         self.client_channel = 0
+        self.global_monitor_thread = None
+        self.global_monitor_stop = threading.Event()
+        self.global_monitor_epoch = 0
+        self.global_monitor_config = None
+        self.global_monitor_enabled = False
+        self.global_monitor_active = False
+        self.global_monitor_updated_at = 0.0
+        self.global_monitor_error = ""
+        self.global_talking = set()
+        self.global_monitor_count = 0
 
     def stop_client(self):
         with self.lock:
@@ -195,6 +224,7 @@ class DashboardState:
         if mode not in {"demo", "query", "android", "client"}:
             raise ValueError("Onbekende verbindingsmethode.")
         self.stop_query()
+        self.stop_global_monitor()
         self.stop_client()
         with self.lock:
             self.mode = mode
@@ -210,6 +240,45 @@ class DashboardState:
             self.client_own_id = 0
             self.client_channel = 0
             self.speaking_started = {}
+            self.global_monitor_active = False
+            self.global_monitor_enabled = False
+            self.global_monitor_error = ""
+            self.global_talking = set()
+
+    def stop_global_monitor(self):
+        self.global_monitor_stop.set()
+        with self.lock:
+            self.global_monitor_epoch += 1
+            self.global_monitor_config = None
+            self.global_monitor_active = False
+            self.global_talking = set()
+            self.global_monitor_updated_at = 0.0
+
+    def _record_speakers_locked(self, talking_ids: set[str]):
+        """Apply only real talking observations and record completed transmissions.
+
+        Caller holds self.lock. IDs are source-scoped TS3 client IDs (not
+        nicknames), and only clients actually visible in self.users count.
+        """
+        visible = {str(user["id"]): user for user in self.users}
+        talking_ids = set(talking_ids) & visible.keys()
+        old_ids = set(self.speaking_started)
+        now = time.monotonic()
+        stamp = datetime.now().astimezone().strftime("%H:%M:%S")
+        for uid in old_ids - talking_ids:
+            old = self.speaking_started.pop(uid, None)
+            if old:
+                name, started = old
+                secs = max(0, int(now - started))
+                self.heard.insert(0, {
+                    "name": name, "region": region_for(name),
+                    "time": stamp, "duration": f"{secs//60:02d}:{secs%60:02d}",
+                })
+        for uid in talking_ids - old_ids:
+            self.speaking_started[uid] = (visible[uid]["name"], now)
+        for user in self.users:
+            user["speaking"] = str(user["id"]) in talking_ids
+        self.heard = self.heard[:40]
 
     def stop_query(self):
         self.query_stop.set()
