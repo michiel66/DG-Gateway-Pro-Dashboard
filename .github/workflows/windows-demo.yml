@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dg-blue-demo-\${{ github.ref }}
+  group: dg-blue-demo-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
