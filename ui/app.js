@@ -146,6 +146,9 @@ function renderOnAir(s){
   const active=s.active_users||[];
   panel.classList.toggle("no-voice",!hasRx||!active.length);
   $("onairWarning").hidden=hasRx;
+  const others=$("onairOther");
+  others.replaceChildren();
+  others.hidden=!hasRx||active.length<2;
   if(!hasRx){
     putText("onairTitle","RX-STATUS ONBEKEND");
     putText("onairRegion","Niet beschikbaar via ServerQuery");
@@ -163,6 +166,13 @@ function renderOnAir(s){
   putText("onairRegion","DG-"+u.region+" · "+regionLabel(u.region));
   putText("onairName",String(u.name).replace(/^DG-\d{3}\s*/,""));
   panel.classList.add("talking");
+  if(active.length>1){
+    child(others,"strong",null,"Ook aan het zenden ("+(active.length-1)+")");
+    active.slice(1,9).forEach(person=>{
+      child(others,"div",null,"DG-"+person.region+" · "+
+            String(person.name).replace(/^DG-\d{3}\s*/,""));
+    });
+  }
 }
 function render(s){
   lastStatus=s;
