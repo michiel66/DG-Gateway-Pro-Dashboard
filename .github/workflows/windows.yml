@@ -12,7 +12,7 @@ jobs:
   windows:
     name: Test and build Windows exe
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 110
     steps:
       - name: Checkout Windows viewer project
         uses: actions/checkout@v4
@@ -22,6 +22,27 @@ jobs:
         with:
           python-version: "3.12"
           architecture: x64
+
+      - name: Install Rust toolchain for the normal TeamSpeak client
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Download pinned WebSpeak3 normal TeamSpeak client
+        shell: bash
+        run: |
+          git clone --recurse-submodules https://github.com/WebSpeak3/webspeak3.git upstream
+          cd upstream
+          git checkout c2b52b323d2ef10e388b2b600444a98390c5cc7a
+          git submodule update --init --recursive
+
+      - name: Disable speaker-audio samples for the viewer
+        run: python scripts/patch_webspeak_viewer.py
+
+      - name: Compile real TS3 viewer protocol connector
+        shell: bash
+        run: |
+          cd upstream/connector
+          cargo build --release
+          test -f target/release/ts-connector.exe
 
       - name: Install Windows dashboard dependencies
         run: |
@@ -35,7 +56,7 @@ jobs:
 
       - name: Build Windows .exe (PyInstaller)
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name DG-Gateway-Pro-Dashboard --add-data "ui;ui" --collect-all webview app.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name DG-Gateway-Pro-Dashboard --add-data "ui;ui" --add-binary "upstream/connector/target/release/ts-connector.exe;." --collect-all webview app.py
           if (-not (Test-Path "dist/DG-Gateway-Pro-Dashboard.exe")) { throw "EXE niet gevonden" }
 
       - name: Package Windows application and instructions
@@ -43,6 +64,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path "release/DG-Gateway-Pro-Windows" | Out-Null
           Copy-Item "dist/DG-Gateway-Pro-Dashboard.exe" "release/DG-Gateway-Pro-Windows/"
           Copy-Item "README.md" "release/DG-Gateway-Pro-Windows/LEESMIJ.md"
+          Copy-Item "upstream/LICENSE" "release/DG-Gateway-Pro-Windows/LICENSE-WebSpeak3.txt"
           Get-FileHash "dist/DG-Gateway-Pro-Dashboard.exe" -Algorithm SHA256 | Format-List | Out-File "release/DG-Gateway-Pro-Windows/SHA256.txt"
 
       - name: Upload Windows exe
