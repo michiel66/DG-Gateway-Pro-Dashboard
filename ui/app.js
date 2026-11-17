@@ -191,10 +191,7 @@ function render(s){
   $("mapCaption").textContent = s.demo?
     "SCHEMATISCHE KAART · VOORBEELDGEGEVENS · GEEN ECHTE TRANSMISSIE":
     "Schematische provincies · DG-groepen zijn virtuele TeamSpeak-regio's";
-  if(firstLoad){
-    firstLoad=false;
-    showDialog("demo");
-  }
+  if(firstLoad){ firstLoad=false; }
 }
 async function request(path,data){
   const res=await fetch(path,{
@@ -264,8 +261,13 @@ function wireEvents(){
   });
   $("fullscreenBtn").addEventListener("click",async()=>{
     try{
-      if(document.fullscreenElement)await document.exitFullscreen();
-      else await document.documentElement.requestFullscreen();
+      if(window.pywebview?.api?.toggle_fullscreen){
+        await window.pywebview.api.toggle_fullscreen();
+      }else if(document.fullscreenElement){
+        await document.exitFullscreen();
+      }else{
+        await document.documentElement.requestFullscreen();
+      }
     }catch(e){putText("sourceNote","Fullscreen aanpassen kan ook met Alt+Enter of via Windows-vensterbediening.")}
   });
   document.addEventListener("keydown",e=>{
