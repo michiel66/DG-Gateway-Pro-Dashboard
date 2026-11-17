@@ -155,14 +155,13 @@ class DirectViewer:
                     if event.get("type") == "connected":
                         # Native engine sends the initial identity; persist on disk for TS rights.
                         store_identity(event.get("identity", ""))
-                        try:
-                            # Initial connection defaults to muted; repeat explicitly.
-                            # No output-mute: microphone is absent regardless; incoming
-                            # packet activity is needed for the talker indicator.
-                            # Audio is discarded by the patched connector (no audioOut).
-                            pass
-                        except Exception:
-                            pass
+                        # Force a muted TS3 identity in addition to not opening a mic.
+                        # Do not mute output in TS protocol: incoming packets carry
+                        # speaking activity, but PCM is discarded inside Rust.
+                        with self.write_lock:
+                            if proc.stdin and proc.poll() is None:
+                                proc.stdin.write("muteinput 1\n")
+                                proc.stdin.flush()
                     if event.get("type") == "audioOut":
                         # Defensive: even when running a non-patched connector, never
                         # forward any audio data to the dashboard or a sound device.
