@@ -497,7 +497,8 @@ class DashboardState:
                         "id": str(uid), "name": nickname,
                         "region": region_for(nickname),
                         "channel_id": int(client.get("channel") or 0),
-                        "speaking": uid in self.client_talking,
+                        "speaking": str(uid) in (self.global_talking if self.global_monitor_active
+                                                else {str(x) for x in self.client_talking}),
                     })
                 self.users = clients
                 self.channels = [
@@ -506,30 +507,22 @@ class DashboardState:
                 ]
                 self.connected = True
                 self.speaker_data = True
+                self._record_speakers_locked(
+                    self.global_talking if self.global_monitor_active
+                    else {str(uid) for uid in self.client_talking}
+                )
                 self.updated_at = time.time()
                 self.error = ""
             elif kind == "talkers":
-                old = self.client_talking
-                self.client_talking = {int(uid) for uid in (event.get("clients") or [])[:300] if isinstance(uid, int)}
+                # Direct TS client only knows actual speakers it can hear in
+                # its channel; don't let that narrow status overwrite server-
+                # wide flags when an authorised Query monitor is active.
+                self.client_talking = {
+                    int(uid) for uid in (event.get("clients") or [])[:300] if isinstance(uid, int)
+                }
                 self.client_talking.discard(self.client_own_id)
-                now = time.monotonic()
-                stamp = datetime.now().astimezone().strftime("%H:%M:%S")
-                names_by_id = {int(user["id"]): user for user in self.users}
-                for uid in old - self.client_talking:
-                    old_spk = self.speaking_started.pop(str(uid), None)
-                    if old_spk:
-                        name, started = old_spk
-                        secs = max(0, int(now-started))
-                        self.heard.insert(0, {
-                            "name": name, "region": region_for(name), "time": stamp,
-                            "duration": f"{secs//60:02d}:{secs%60:02d}",
-                        })
-                for uid in self.client_talking - old:
-                    if uid in names_by_id:
-                        self.speaking_started[str(uid)] = (names_by_id[uid]["name"], now)
-                self.heard = self.heard[:40]
-                for user in self.users:
-                    user["speaking"] = int(user["id"]) in self.client_talking
+                if not self.global_monitor_active:
+                    self._record_speakers_locked({str(uid) for uid in self.client_talking})
                 self.updated_at = time.time()
             elif kind == "reconnecting":
                 self.connected = False
@@ -538,6 +531,9 @@ class DashboardState:
             elif kind == "reconnected":
                 self.error = ""
             elif kind == "disconnected":
+                self.global_monitor_stop.set()
+                self.global_monitor_active = False
+                self.global_talking.clear()
                 self.connected = False
                 self.speaker_data = False
                 self.users = []
@@ -604,10 +600,17 @@ class DashboardState:
         with self.lock:
             mode = self.mode
             demo = demo_data() if mode == "demo" else None
-            users = demo["users"] if demo else list(self.users)
+            users = demo["users"] if demo else [dict(user) for user in self.users]
             channels = demo["channels"] if demo else list(self.channels)
             heard = demo["heard"] if demo else list(self.heard)
             talk_data = demo["speaker_data"] if demo else self.speaker_data
+            monitor_live = (mode == "client" and self.global_monitor_active
+                            and time.time() - self.global_monitor_updated_at < 8.0)
+            if mode == "client" and not monitor_live:
+                local = {str(uid) for uid in self.client_talking}
+                for user in users:
+                    user["speaking"] = str(user["id"]) in local
+
             selected = self.channel_filter
             shown = [u for u in users if selected == 0 or u.get("channel_id") == selected]
             groups = [{"code": num, "name": name, "count": sum(1 for p in users if p["region"] == num),
@@ -622,6 +625,19 @@ class DashboardState:
                 "groups": groups,
                 "heard": heard if talk_data else [], "speaker_data": talk_data,
                 "active_users": active, "updated_at": self.updated_at,
+                "talk_scope": ("voorbeeld" if mode == "demo"
+                               else "hele_server" if mode == "query" and talk_data
+                               else "hele_server" if monitor_live
+                               else "eigen_kanaal" if mode == "client"
+                               else "onbekend"),
+                "monitor": {
+                    "enabled": self.global_monitor_enabled if mode == "client" else False,
+                    "live": monitor_live,
+                    "query_users": self.global_monitor_count if monitor_live else 0,
+                    "error": self.global_monitor_error if mode == "client" else "",
+                    "last_update": self.global_monitor_updated_at if monitor_live else 0,
+                    "source": "ServerQuery -voice" if monitor_live else "TeamSpeak client",
+                },
                 "pair": {
                     "code": self.pair_code if time.monotonic() - self.pair_created < 300 and not self.pair_token else "",
                     "qr": self.pair_qr if not self.pair_token else "",
@@ -712,6 +728,8 @@ class LocalHandler(BaseHTTPRequestHandler):
                 STATE.connect_query(data)
             elif p == "/api/connect-client":
                 STATE.connect_client(data)
+            elif p == "/api/global-monitor":
+                STATE.start_global_monitor(data)
             elif p == "/api/disconnect":
                 STATE.set_mode("demo")
             elif p == "/api/channel":
@@ -918,6 +936,7 @@ def run():
         webview.start(debug=False)
     finally:
         STATE.stop_query()
+        STATE.stop_global_monitor()
         STATE.stop_client()
         local.shutdown()
         if pair:
