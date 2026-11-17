@@ -183,40 +183,51 @@ function render(s){
   $("modeDot").style.background=s.mode==="demo"?"#ffc44c":s.connected?"#50fb84":"#fa4e55";
   $("modeDot").style.boxShadow=s.mode==="demo"?"0 0 11px #ffc44c":s.connected?"0 0 11px #50fb84":"0 0 10px #fa4e55";
   const monitor=s.monitor||{};
-  const serverWide=["hele_server","gedeeltelijk"].includes(s.talk_scope);
+  const observers=s.observers||{};
+  const queryLive=Boolean(monitor.live);
+  const watcherLive=Boolean(observers.used);
+  const serverWide=["hele_server","gedeeltelijk","zichtbare_kanalen"].includes(s.talk_scope);
   const partial=s.talk_scope==="gedeeltelijk";
   const msg=s.error||(
       s.mode==="demo"?"VOORBEELDGEGEVENS — dit is geen live TeamSpeak-verbinding":
       s.mode==="android"?(s.connected?"Android stuurt echte ontvangergegevens":"Android-koppeling vereist een toekomstige app-update"):
       s.mode==="client"?(s.connected?(serverWide?
-          partial?"LIVE · SERVERBREDE RX/TX GEDEELTELIJK · geen pc-audio":
-                  "LIVE · SERVERBREDE RX/TX VIA SERVERQUERY · geen pc-audio":
-          "LIVE · alleen RX/TX eigen TeamSpeak-kanaal"):"Niet verbonden met TeamSpeak"):
+          (queryLive ? "SERVERQUERY" : "KANAALBEWAKERS")+
+          (partial?" · DEEL VAN SERVER":" · ALLE ZICHTBARE BEZETTE KANALEN")+
+          " · LIVE RX/TX · geen pc-audio":
+          observers.enabled?"LIVE · kanaalbewakers verbinden · geen audio":
+                            "LIVE · alleen RX/TX eigen TeamSpeak-kanaal"):"Niet verbonden met TeamSpeak"):
       s.connected?(serverWide?"SERVERQUERY LIVE · ALLE TOEGANKELIJKE KANALEN":
                    "SERVERQUERY VERBONDEN · spreekstatus ontbreekt"):"Niet verbonden met ServerQuery"
   );
   putText("sourceNote",msg);
   putText("connectionState",msg);
   $("monitorTools").hidden=s.mode!=="client";
-  const monText=monitor.live?
-    (partial?"GEDEELTELIJKE RX/TX · ":"SERVERBREDE RX/TX · ")+
+  const monText=queryLive?
+    (partial?"SERVERQUERY DEKKING GEDEELTELIJK · ":"SERVERBREDE RX/TX · ")+
     (monitor.query_users||0)+" / "+(monitor.visible_users||0)+" gebruikers":
-    monitor.enabled?"ALLEEN EIGEN KANAAL · MONITOR NIET BESCHIKBAAR":
+    watcherLive?"KANAALBEWAKERS · "+(observers.covered_occupied||0)+
+                  " / "+(observers.total_occupied||0)+" bezette kanalen":
+    observers.enabled?"KANAALBEWAKERS VERBINDEN · "+(observers.active_channels||0)+" actief":
+    monitor.enabled?"ALLEEN EIGEN KANAAL · SERVERQUERY GEBLOKKEERD":
                     "ALLEEN EIGEN KANAAL · MONITOR UIT";
   putText("monitorStatus",monText);
-  $("monitorStatus").classList.toggle("online",Boolean(monitor.live) && !partial);
-  $("monitorStatus").classList.toggle("partial",Boolean(monitor.live) && partial);
-  $("monitorStatus").title=monitor.live?
-    (partial?"ServerQuery ziet niet alle gebruikers die de normale TeamSpeak-client toont.":
-             "ServerQuery -voice leest elke 2 seconden de toegankelijke kanalen."):
-    (monitor.error||"RX/TX is beperkt tot het geselecteerde kanaal.");
-  if(s.mode==="client") putText("monitorExplain",monitor.error||
-    (monitor.live?"Serverbrede spreekstatus is actief. Polling elke 2 seconden.":
-     "Automatisch proberen zonder login; als de server geen toegang geeft, vraag leesrechten."));
+  $("monitorStatus").classList.toggle("online",serverWide && !partial);
+  $("monitorStatus").classList.toggle("partial",partial);
+  $("monitorStatus").title=queryLive?
+    "ServerQuery leest de spreekstatus van toegankelijke kanalen.":
+    watcherLive?"Gedempte kijkverbindingen lezen RX/TX in bezette toegankelijke kanalen.":
+    (observers.error||monitor.error||"RX/TX is beperkt tot het geselecteerde kanaal.");
+  if(s.mode==="client") putText("monitorExplain",
+    (queryLive?"ServerQuery-spreekstatus actief. ":monitor.error||"")+
+    (observers.enabled?" Kanaalbewakers: "+(observers.covered_occupied||0)+
+    " van "+(observers.total_occupied||0)+" bezette kanalen gedekt. "+
+    (observers.error||""):""));
   putText("legendFoot",serverWide?
-    (partial?"Groen = spreekstatus uit een DEEL van de TeamSpeak-kanalen":
-             "Groen = echte spreekstatus uit toegankelijke TeamSpeak-kanalen (ServerQuery -voice)") :
-    s.speaker_data?"Groen = spreekstatus in het waargenomen TeamSpeak-kanaal":
+    (partial?"Groen = echte RX/TX uit een DEEL van de toegankelijke kanalen":
+             queryLive?"Groen = echte ServerQuery spreekstatus uit alle zichtbare kanalen":
+                       "Groen = echte RX/TX uit alle zichtbare bezette kanalen") :
+    s.speaker_data?"Groen = sprekers in het gekozen kanaal":
                    "Geen spreekstatus beschikbaar; geen fictieve groenverlichting.");
   $("channelControls").hidden=!["query","client"].includes(s.mode)||!s.connected;
   putText("channelLabel",s.mode==="client"?"TS-kanaal kiezen":"Kanaalfilter");
@@ -229,9 +240,10 @@ function render(s){
   if(pair.qr){$("qrImage").src=pair.qr;$("qrImage").hidden=false}else{$("qrImage").hidden=true}
   $("mapCaption").textContent = s.demo?
     "SCHEMATISCHE KAART · VOORBEELDGEGEVENS · GEEN ECHTE TRANSMISSIE":
-    serverWide?(partial?"SERVERBREDE RX/TX GEDEELTELIJK · BEPERKTE SERVERRECHTEN":
-                       "SERVERBREDE RX/TX · 2 SEC PEILING · ALLEEN TOEGANKELIJKE KANALEN"):
-    s.mode==="client"?"RX/TX alleen in huidig kanaal · stel Serverbrede RX/TX in":
+    queryLive?"LIVE SERVERQUERY · ±2 SEC PEILING · TOEGANKELIJKE KANALEN":
+    watcherLive?(partial?"LIVE RX/TX · GEDEELTELIJKE KANAALDEKKING":
+                         "LIVE RX/TX · ALLE ZICHTBARE BEZETTE KANALEN"):
+    s.mode==="client"?"RX/TX alleen in huidig kanaal · activeer ServerQuery of kanaalbewakers":
                        "Schematische provincies · DG-groepen zijn virtuele TeamSpeak-regio's";
   if(firstLoad){ firstLoad=false; }
 }
@@ -264,6 +276,10 @@ function dialogTab(tab){
   $("monitorForm").hidden=tab!=="monitor";
   $("queryForm").hidden=tab!=="query";
   $("monitorTab").hidden=lastStatus?.mode!=="client";
+  if(tab==="monitor"){
+    $("updateObservers").checked=Boolean(lastStatus?.observers?.enabled);
+    $("updateObserverLimit").value=String(lastStatus?.observers?.limit||4);
+  }
   document.querySelectorAll(".dialog-tabs button").forEach(b=>b.classList.toggle("active",b.dataset.dialogTab===tab));
   $("dialogError").hidden=true;
 }
@@ -298,7 +314,9 @@ function wireEvents(){
         query_port:Number($("clientQueryPort").value||10011),
         voice_port:Number($("clientVoicePort").value||9987),
         login:$("clientQueryLogin").value,
-        password:$("clientQueryPassword").value
+        password:$("clientQueryPassword").value,
+        observe_channels:$("startObservers").checked,
+        max_observers:Number($("startObserverLimit").value||4)
       });
       $("clientQueryPassword").value="";
       regionFilter=0;closeDialog();await poll();
@@ -320,6 +338,17 @@ function wireEvents(){
       closeDialog();await poll();
     }catch(err){dialogError(err)}
     finally{$("saveGlobalBtn").disabled=false}
+  });
+  $("saveObserverBtn").addEventListener("click",async()=>{
+    $("saveObserverBtn").disabled=true;
+    try{
+      await request("/api/channel-observers",{
+        enabled:$("updateObservers").checked,
+        limit:Number($("updateObserverLimit").value||4)
+      });
+      closeDialog();await poll();
+    }catch(err){dialogError(err)}
+    finally{$("saveObserverBtn").disabled=false}
   });
   $("queryForm").addEventListener("submit",async e=>{
     e.preventDefault();
