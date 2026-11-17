@@ -142,6 +142,11 @@ class ChannelObservers:
         with self.state.lock:
             if self.state.mode != "client" or not self.state.connected:
                 return [], 0
+            # When the authorised server Query provides full voice data,
+            # do not consume unnecessary TeamSpeak voice-client slots.
+            if (self.state.global_monitor_active and
+                    time.time() - self.state.global_monitor_updated_at < 8):
+                return [], self.state.client_channel
             own_channel = self.state.client_channel
             channels = {int(ch["id"]) for ch in self.state.channels}
             occupancy = {}
