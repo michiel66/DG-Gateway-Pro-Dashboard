@@ -4,19 +4,23 @@
 
 > **Belangrijk:** DG-100 t/m DG-111 zijn onze eigen regiolabels in TeamSpeak-nicknames, **geen officiële DMR-talkgroups of echte radio-repeaters**. De Nederlandkaart gebruikt virtuele regiomarkers. Een gebruiker met de naam `DG-103 Michiel` hoort bij Zuid-Holland, ongeacht zijn werkelijke locatie.
 
-## Wat werkt in deze eerste Windows-versie?
+## Wat werkt in de nieuwe Windows-versie?
 
-- Fullscreen Windows-app in de donkerblauwe/neonlook van het afgesproken ontwerp; responsieve Nederlandkaart, 12 DG-provincies + DG-999 Overige, live klok, keuze voor schermvullend venster.
-- **Voorbeeldmodus:** herkenbare demonstratie met duidelijk het label **VOORBEELD**. Getoonde gebruikers, beweging en Last Heard zijn uitsluitend fictieve testgegevens.
-- **Direct via TeamSpeak ServerQuery:** als de serverbeheerder **read-only ServerQuery-toegang** toestaat, kan het dashboard gebruikers en kanalen uitlezen, op kanaal filteren, en gebruikers op basis van hun DG-prefix per regio groeperen. Standaardserver: `heerlen.mijnts3.nl`. Query-poort standaard `10011`, TS3-voicepoort meestal `9987`. Querygegevens kunnen niet zonder toestemming van de serverbeheerder worden opgehaald.
-- **Android-koppelontwerp:** bij starten krijgt Windows een nieuwe QR-code en een zescijferige code. Een lokale HTTPS-ontvanger met tijdelijke certificaatvingerafdruk staat klaar voor een **toekomstige update van de Android-app**. De Android-app 2.0.2 kan hiermee **nog niet koppelen**. Koppelcode verloopt en is bij herstart anders; geen automatische herverbinding.
-- Geen audio-opname, geen RX/TX-geluid op Windows, geen PTT en geen microfoon.
+- **Normale TeamSpeak-verbinding zonder portofoonapp of ServerQuery-account.** Net als [TS-Heerlen-pc](https://github.com/michiel66/TS-Heerlen-pc) wordt de vastgepinde, werkende [WebSpeak3](https://github.com/WebSpeak3/webspeak3) TS3-protocolconnector gebruikt. De pc meldt zich aan bij `heerlen.mijnts3.nl` als `DashboardView/gebruikersnaam`.
+- **Geen audio of PTT op Windows:** de dashboardcode opent **geen microfoon**, stuurt **geen spraak** en gebruikt **geen luidspreker**. De onderliggende protocolconnector verwerkt inkomende pakketten uitsluitend om de TeamSpeak-spreekstatus vast te stellen; audiobuffers worden niet doorgegeven aan het dashboard. De viewerclient staat op *input muted*.
+- **Echte online namen, kanalen en spreekactiviteit:** met normale TS3-rechten worden gebruikers via de protocolclient gelezen. Er is **geen TeamSpeak 3-installatie** nodig. Als de server weigert of de benodigde rechten beperkt, verschijnt een duidelijke foutmelding.
+- **Kanaalkeuze:** het dashboard kan zijn eigen `DashboardView/naam`-client naar een gekozen TeamSpeak-kanaal verplaatsen. Alleen de spreekactiviteit die de client kan waarnemen, doorgaans het eigen kanaal, activeert de groene regiomarkers.
+- **Nederlandkaart:** twaalf virtuele regio's DG-100 t/m DG-111, plus DG-999 Overige. DG-103 is Zuid-Holland. Realtime spreekactiviteit wordt groen; Last Heard wordt alleen opgebouwd uit werkelijk gedetecteerde spreekevents.
+- **Fullscreen:** de donkere neon-/zilverstijl past zich automatisch aan de schermgrootte aan.
+- **Voorbeeld:** een duidelijk gemarkeerde demonstratiemodus met fictieve gegevens om de uitstraling te bekijken.
+- **ServerQuery (beheer):** blijft als optionele aanvullende modus behouden; daarvoor zijn ServerQuery-rechten nodig en is geen spreekstatus beschikbaar.
+- **Met Android:** tijdelijke QR-code en zescijferige koppelcode worden voorbereid op Windows. De huidige Android-app 2.0.2 heeft hiervoor **nog geen verbindingsmodule**.
 
-### Wat werkt nog NIET zonder extra component?
+### Wat is er technisch overgenomen?
 
-De wens om zonder Android als een **normale** TeamSpeak-client genaamd `DashboardView/gebruikersnaam` te verbinden kan niet worden nagebootst met ServerQuery. Een queryverbinding is een *beheer-/leesinterface*, geen normale TeamSpeak 3-clientsessie, en maakt geen spraakverbinding. De standalone-modus in deze eerste versie is daarom expliciet **ServerQuery-viewer**, geen normale TeamSpeak-deelnemer. Voor een zichtbare normale TS-client is later een aparte protocolclient of officieel SDK-traject nodig.
+De huidige [TS-Heerlen-pc](https://github.com/michiel66/TS-Heerlen-pc) Windows-app bouwt de WebSpeak3-protocolconnector vanaf exact commit `c2b52b323d2ef10e388b2b600444a98390c5cc7a`. Dit dashboard gebruikt **dezelfde vastgepinde upstream-versie**. Alleen de audio-PCM-uitvoer wordt uitgeschakeld; verbinding, users, channels, talkers en kanaalwissel blijven beschikbaar. Dit project voert **geen PTTConnect-UI/audio** uit.
 
-ServerQuery kan online gebruikers en kanalen leveren, maar **geen betrouwbare realtime spreekactiviteit in alle kanalen**. Regiologo's worden in die modus daarom NIET fictief groen. Een `Last Heard`-overzicht verschijnt pas als daadwerkelijk spreekevents worden aangeleverd door een compatibele Android-upgrade/andere geautoriseerde bron.
+Er zijn technische grenzen: sommige TeamSpeak-servers laten een gewone client niet alle kanalen zien of verbieden channel moves. Een gebruiker buiten het gekozen kanaal kan zichtbaar zijn zonder dat diens spreekstatus waarneembaar is. We beweren daarom niet alle kanalen gelijktijdig te monitoren.
 
 ## Download Windows .exe
 
@@ -26,24 +30,32 @@ Op Windows 10 of 11 is de **Microsoft Edge WebView2 Runtime** nodig. Die is op d
 
 ## Aan de slag
 
-1. Pak het artifact-ZIP uit en start de Windows exe.
-2. Het dashboard opent **schermvullend**. De **Voorbeeld**-modus is veilig om de indeling te bekijken.
-3. Kies bovenaan **TeamSpeak direct** als je ServerQuery-toegang van de beheerder hebt. Vul je naam, host, querypoort, voicepoort en (indien vereist) ServerQuery-inloggegevens in. De Query-inloggegevens worden niet op de pc opgeslagen.
-4. Bij een geslaagde verbinding worden gebruikers en kanalen ingelezen. Via **Kanaal** filter je de lijst. Afhankelijk van ServerQuery-rechten zijn sommige kanalen onzichtbaar.
-5. De **Met Android**-modus toont QR en code plus de status **Android-update nodig**. Het is nu een veilige voorbereiding; de Android-app hoeft hiervoor niet aangepast te worden totdat we daar apart toestemming voor geven.
-6. Druk op **Esc** of de fullscreenknop om de venstergrootte te wijzigen. De weergave past zich automatisch aan de grootte van het scherm aan.
+1. Pak de geslaagde Windows-EXE uit en start `DG-Gateway-Pro-Dashboard.exe`.
+2. Het dashboard opent schermvullend. De voorbeeldmodus bevat uitsluitend herkenbare testgegevens.
+3. Kies **TeamSpeak direct** en vul je naam in, bijvoorbeeld **Michiel**.
+4. Klik **Verbinden zonder audio**. Je verschijnt op de TeamSpeak-server als `DashboardView/Michiel`. Er is geen ServerQuery-account nodig.
+5. Zodra de echte kanalen verschijnen, kies bovenaan het kanaal dat je wilt observeren. Je pc hoort niets en kan niet praten.
+6. Wanneer bijvoorbeeld `DG-103 Ruud` binnen het waargenomen kanaal spreekt, wordt het virtuele repeaterlogo van Zuid-Holland groen en wordt zijn gesprek geregistreerd in Last Heard.
+7. Via **ServerQuery (beheer)** kan de serverbeheerder optioneel de oude queryuitlezing gebruiken, maar zonder spreekstatus.
+8. Via **Met Android** zie je de toekomstige QR-koppeling. Hiervoor is later een Android-update vereist.
+
+## Windows-beveiliging en privacy
+
+De Windows viewer slaat de door WebSpeak3 uitgegeven TeamSpeak-identiteit lokaal op in het gebruikersprofiel, zodat de server dezelfde bezoeker kan herkennen. De connector heeft geen toegang tot de microfoon, het dashboard speelt geen spraakgeluid af en maakt geen audio-opname. Alleen het connectorproces ontvangt protocolaudiopakketten voor spreekstatus. Wachtwoorden of serverbeheergegevens zijn niet vereist voor **TeamSpeak direct**. Gebruik je de optionele ServerQuery-beheermodus, geef dan uitsluitend beperkte leesrechten.
 
 ## Architectuur
 
-- `app.py`: lokale API, fictieve voorbeelddata, TeamSpeak ServerQuery-polling, beveiligde tijdelijke LAN-koppeling en Windows-start.
+- `app.py`: lokale API, echte TeamSpeak-gebruikers en RX-status, optionele ServerQuery-polling, beveiligde LAN-ontvanger en Windows-start.
+- `direct_client.py`: start de vastgepinde normale WebSpeak3 TS3-connector als gedempte Windows-kijkclient; verwerkt uitsluitend users, channels en talkers.
+- `scripts/patch_webspeak_viewer.py`: blokkeert PCM-uitvoer vanuit WebSpeak3 zonder de sprekersdetectie uit te schakelen.
 - `ui/index.html`, `ui/style.css`, `ui/app.js`: responsief Nederland-dashboard met schematische provinciecontouren, geen externe CDNs of tracking.
-- `.github/workflows/windows.yml`: Windows 64-bit PyInstaller testbuild.
+- `.github/workflows/windows.yml`: Windows 64-bit PyInstaller testbuild, met de officiële WebSpeak3-connector ingebouwd.
 - `tests/test_core.py`: regressietests voor DG-indeling, ServerQuery-escaping, spreekstatusverwerking en API-output.
 
-Het project gebruikt Python, [pywebview](https://pywebview.flowrl.com/), cryptography en qrcode. Het dashboard wordt **uitsluitend lokaal** weergegeven; de lokale LAN-koppeling vereist een autorisatiecode en een door Android te verifiëren TLS-vingerafdruk. Gebruik de app alleen op vertrouwde netwerken.
+Het project gebruikt Python, [pywebview](https://pywebview.flowrl.com/), cryptography, qrcode en de MIT-gelicentieerde [WebSpeak3](https://github.com/WebSpeak3/webspeak3)-connector. De originele WebSpeak3-LICENSE wordt met de Windows-EXE meegeleverd. Het dashboard wordt **uitsluitend lokaal** weergegeven; de lokale LAN-koppeling vereist een autorisatiecode en een door Android te verifiëren TLS-vingerafdruk. Gebruik de app alleen op vertrouwde netwerken.
 
 ## Privacy en rechten
 
-Online namen en TG-/DG-prefixen zijn alleen beschikbaar volgens de toegangsrechten van de TeamSpeak-server. Het dashboard vraagt geen microfoonmachtiging en registreert geen gesprekken. Het schrijft geen gegevens terug naar de TeamSpeak-server. Maak geen ServerQuery-beheerdersaccount speciaal voor eindgebruikers; laat de beheerder een beperkt leesaccount maken.
+Online namen en TG-/DG-prefixen zijn alleen beschikbaar volgens de toegangsrechten van de TeamSpeak-server. Het dashboard vraagt geen microfoonmachtiging en registreert geen audio-opnames. Het Last Heard-overzicht bevat uitsluitend namen, tijdstippen en spreekduur. Het schrijft geen gegevens terug naar de TeamSpeak-server. Maak geen ServerQuery-beheerdersaccount speciaal voor eindgebruikers; laat de beheerder een beperkt leesaccount maken.
 
 *DG Gateway Pro is onafhankelijk van TeamSpeak Systems, DMR en BrandMeister.*
