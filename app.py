@@ -605,9 +605,16 @@ def run():
         discovery.start()
     try:
         import webview
+        class WindowControl:
+            def toggle_fullscreen(self):
+                """Native pywebview fullscreen toggle; Esc also closes dialogs in the UI."""
+                webview.windows[0].toggle_fullscreen()
+                return True
+
         webview.create_window(APP_TITLE, f"http://127.0.0.1:{local_port}",
-                              width=1600, height=900, min_size=(850, 560),
-                              resizable=True, fullscreen=True, background_color="#030b17")
+                              js_api=WindowControl(), width=1600, height=900,
+                              min_size=(850, 560), resizable=True, fullscreen=True,
+                              background_color="#030b17")
         webview.start(debug=False)
     finally:
         STATE.stop_query()
