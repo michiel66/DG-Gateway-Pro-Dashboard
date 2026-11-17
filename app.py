@@ -25,6 +25,7 @@ import tempfile
 import threading
 import time
 from direct_client import DirectViewer, display_nickname
+from channel_observers import ChannelObservers, MAX_OBSERVERS
 from urllib.parse import urlparse, parse_qs
 
 
@@ -215,6 +216,20 @@ class DashboardState:
         self.global_monitor_error = ""
         self.global_talking = set()
         self.global_monitor_count = 0
+        self.observers = ChannelObservers(self)
+
+    def observer_updated(self, pool):
+        with self.lock:
+            if self.mode != "client" or pool is not self.observers:
+                return
+            if not self.global_monitor_active:
+                self._record_speakers_locked(self._direct_talkers_locked())
+                self.updated_at = time.time()
+
+    def _direct_talkers_locked(self) -> set[str]:
+        result = {str(uid) for uid in self.client_talking}
+        additional, _ = self.observers.collect()
+        return result | additional
 
     def stop_client(self):
         with self.lock:
@@ -228,6 +243,7 @@ class DashboardState:
             raise ValueError("Onbekende verbindingsmethode.")
         self.stop_query()
         self.stop_global_monitor()
+        self.observers.stop()
         self.stop_client()
         with self.lock:
             self.mode = mode
@@ -256,6 +272,8 @@ class DashboardState:
             self.global_monitor_active = False
             self.global_talking = set()
             self.global_monitor_updated_at = 0.0
+            if self.mode == "client":
+                self._record_speakers_locked(self._direct_talkers_locked())
 
     def _record_speakers_locked(self, talking_ids: set[str]):
         """Apply only real talking observations and record completed transmissions.
@@ -395,7 +413,7 @@ class DashboardState:
             )
             self.global_monitor_count = 0
             if not enabled:
-                self._record_speakers_locked({str(uid) for uid in self.client_talking})
+                self._record_speakers_locked(self._direct_talkers_locked())
                 return
             self.global_monitor_config = (SERVER, port, voice_port, login, password)
             stop = threading.Event()
@@ -436,7 +454,7 @@ class DashboardState:
                             + clean_text(exc, 180)
                             + " (alleen eigen kanaal blijft beschikbaar)"
                         )
-                        self._record_speakers_locked({str(uid) for uid in self.client_talking})
+                        self._record_speakers_locked(self._direct_talkers_locked())
                 stop.wait(2.0 if self.global_monitor_active else 6.0)
 
         self.global_monitor_thread = threading.Thread(
@@ -450,6 +468,9 @@ class DashboardState:
         display_nickname(name)  # Validate before changing the existing state.
         port = int(payload.get("query_port") or 10011)
         voice_port = int(payload.get("voice_port") or 9987)
+        watcher_count = int(payload.get("max_observers") or 4)
+        if not 1 <= watcher_count <= MAX_OBSERVERS:
+            raise ValueError(f"Maximaal {MAX_OBSERVERS} extra TeamSpeak-kanaalbewakers.")
         if not (1 <= port <= 65535 and 1 <= voice_port <= 65535):
             raise ValueError("Ongeldige ServerQuery- of voicepoort.")
         if bool(clean_text(payload.get("login"))) != bool(str(payload.get("password") or "")):
@@ -467,6 +488,11 @@ class DashboardState:
         try:
             viewer.start(name)
             self.start_global_monitor(payload)
+            # Additional normal-client sessions require explicit opt-in, as
+            # they consume server slots and are visible to other TS clients.
+            self.observers.configure(
+                bool(payload.get("observe_channels", False)), watcher_count
+            )
         except (RuntimeError, OSError, ValueError):
             viewer.stop()  # Never leak an active TS client if monitor setup fails.
             with self.lock:
@@ -516,7 +542,7 @@ class DashboardState:
                 self.speaker_data = True
                 self._record_speakers_locked(
                     self.global_talking if self.global_monitor_active
-                    else {str(uid) for uid in self.client_talking}
+                    else self._direct_talkers_locked()
                 )
                 self.updated_at = time.time()
                 self.error = ""
@@ -529,7 +555,7 @@ class DashboardState:
                 }
                 self.client_talking.discard(self.client_own_id)
                 if not self.global_monitor_active:
-                    self._record_speakers_locked({str(uid) for uid in self.client_talking})
+                    self._record_speakers_locked(self._direct_talkers_locked())
                 self.updated_at = time.time()
             elif kind == "reconnecting":
                 self.connected = False
@@ -538,6 +564,8 @@ class DashboardState:
             elif kind == "reconnected":
                 self.error = ""
             elif kind == "disconnected":
+                # Stop all extra TS3 sessions as soon as the main viewer leaves.
+                self.observers.stop()
                 self.global_monitor_stop.set()
                 self.global_monitor_epoch += 1
                 self.global_monitor_enabled = False
@@ -615,10 +643,24 @@ class DashboardState:
             talk_data = demo["speaker_data"] if demo else self.speaker_data
             monitor_live = (mode == "client" and self.global_monitor_active
                             and time.time() - self.global_monitor_updated_at < 8.0)
+            watcher_talkers, watcher_status = self.observers.collect()
+            occupied = {
+                int(user.get("channel_id") or 0) for user in users
+                if int(user.get("channel_id") or 0) > 0
+            }
+            viewed_channels = ({self.client_channel} if self.connected and self.client_channel else set())
+            viewed_channels.update(watcher_status["channels"])
+            covered = occupied & viewed_channels
+            watch_live = (
+                mode == "client" and watcher_status["enabled"]
+                and bool(occupied) and bool(watcher_status["active_channels"])
+                and not monitor_live
+            )
+            all_visible_covered = bool(occupied) and occupied.issubset(viewed_channels)
             if mode == "client" and not monitor_live:
-                local = {str(uid) for uid in self.client_talking}
+                direct = {str(uid) for uid in self.client_talking} | watcher_talkers
                 for user in users:
-                    user["speaking"] = str(user["id"]) in local
+                    user["speaking"] = str(user["id"]) in direct
 
             selected = self.channel_filter
             shown = [u for u in users if selected == 0 or u.get("channel_id") == selected]
@@ -638,8 +680,17 @@ class DashboardState:
                                else "hele_server" if mode == "query" and talk_data
                                else "gedeeltelijk" if monitor_live and self.global_monitor_count < len(users)
                                else "hele_server" if monitor_live
+                               else "zichtbare_kanalen" if watch_live and all_visible_covered
+                               else "gedeeltelijk" if watch_live
                                else "eigen_kanaal" if mode == "client"
                                else "onbekend"),
+                "observers": {
+                    **watcher_status,
+                    "covered_occupied": len(covered),
+                    "total_occupied": len(occupied),
+                    "complete": bool(watch_live and all_visible_covered),
+                    "used": bool(watch_live),
+                },
                 "monitor": {
                     "enabled": self.global_monitor_enabled if mode == "client" else False,
                     "live": monitor_live,
@@ -741,6 +792,13 @@ class LocalHandler(BaseHTTPRequestHandler):
                 STATE.connect_client(data)
             elif p == "/api/global-monitor":
                 STATE.start_global_monitor(data)
+            elif p == "/api/channel-observers":
+                if STATE.mode != "client":
+                    raise ValueError("Verbind eerst via TeamSpeak direct.")
+                STATE.observers.configure(
+                    bool(data.get("enabled", False)),
+                    int(data.get("limit") or 4)
+                )
             elif p == "/api/disconnect":
                 STATE.set_mode("demo")
             elif p == "/api/channel":
@@ -948,6 +1006,7 @@ def run():
     finally:
         STATE.stop_query()
         STATE.stop_global_monitor()
+        STATE.observers.stop()
         STATE.stop_client()
         local.shutdown()
         if pair:
