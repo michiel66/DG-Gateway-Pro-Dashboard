@@ -76,7 +76,7 @@ function selectRegion(num){
 }
 function putText(id,text){$(id).textContent=text}
 function setChannelList(s){
-  const rows=[{id:0,name:"Alle kanalen"},...(s.channels||[])];
+  const rows=s.mode==="client" ? (s.channels||[]) : [{id:0,name:"Alle kanalen"},...(s.channels||[])];
   const key=JSON.stringify(rows)+"/"+s.selected_channel;
   if(key===lastSelectSignature)return;
   lastSelectSignature=key;
@@ -168,19 +168,21 @@ function render(s){
   lastStatus=s;
   putText("usersCount",s.all_users_count||0);
   putText("activeCount",s.speaker_data ? (s.groups||[]).filter(g=>g.code!==999&&g.active).length : "—");
-  const source = s.mode==="demo"?"VOORBEELD":s.mode==="android"?"ANDROID": "SERVERQUERY";
-  putText("modeName",s.mode==="demo"?"VOORBEELD":s.mode==="android"?(s.connected?"GEKOPPELD":"WACHT OP ANDROID"):(s.connected?"LIVE · QUERY":"NIET VERBONDEN"));
+  const source = s.mode==="demo"?"VOORBEELD":s.mode==="android"?"ANDROID":s.mode==="client"?"TEAMSPEAK DIRECT":"SERVERQUERY";
+  putText("modeName",s.mode==="demo"?"VOORBEELD":s.mode==="android"?(s.connected?"GEKOPPELD":"WACHT OP ANDROID"):s.mode==="client"?(s.connected?"LIVE · TEAMSPEAK":"VERBINDEN..."):(s.connected?"LIVE · QUERY":"NIET VERBONDEN"));
   $("modeDot").style.background=s.mode==="demo"?"#ffc44c":s.connected?"#50fb84":"#fa4e55";
   $("modeDot").style.boxShadow=s.mode==="demo"?"0 0 11px #ffc44c":s.connected?"0 0 11px #50fb84":"0 0 10px #fa4e55";
   const msg=s.error||(
       s.mode==="demo"?"VOORBEELDGEGEVENS — dit is geen live TeamSpeak-verbinding":
       s.mode==="android"?(s.connected?"Android stuurt echte ontvangergegevens":"Android-koppeling vereist een toekomstige app-update"):
+      s.mode==="client"?(s.connected?"ECHTE TEAMSPEAK-VERBINDING · geen audio via Windows":"Niet verbonden met TeamSpeak"):
       s.connected?"SERVERQUERY VERBONDEN — spreekstatus niet beschikbaar":"Niet verbonden met ServerQuery"
   );
   putText("sourceNote",msg);
   putText("connectionState",msg);
   putText("legendFoot",s.speaker_data?"Groen = gemelde spreekstatus door gekoppelde bron":"ServerQuery kan geen sprekers detecteren; geen fictieve groenverlichting.");
-  $("channelControls").hidden=s.mode!=="query"||!s.connected;
+  $("channelControls").hidden=!["query","client"].includes(s.mode)||!s.connected;
+  putText("channelLabel",s.mode==="client"?"TS-kanaal kiezen":"Kanaalfilter");
   document.querySelectorAll(".mode-chip").forEach(b=>b.classList.toggle("active",b.dataset.mode===s.mode));
   setChannelList(s);
   renderMap(s);renderGroups(s);renderOnAir(s);renderHeard(s);renderUsers(s);
@@ -218,6 +220,7 @@ function dialogTab(tab){
   activeDialog=tab;
   $("dialogDemo").hidden=tab!=="demo";
   $("dialogAndroid").hidden=tab!=="android";
+  $("clientForm").hidden=tab!=="client";
   $("queryForm").hidden=tab!=="query";
   document.querySelectorAll(".dialog-tabs button").forEach(b=>b.classList.toggle("active",b.dataset.dialogTab===tab));
   $("dialogError").hidden=true;
@@ -242,6 +245,15 @@ function wireEvents(){
     try{await request("/api/mode",{mode:"android"});closeDialog();await poll()}catch(e){dialogError(e)}
   });
   $("returnDemo").addEventListener("click",()=>dialogTab("demo"));
+  $("clientForm").addEventListener("submit",async e=>{
+    e.preventDefault();
+    $("connectClientBtn").disabled=true;
+    try{
+      await request("/api/connect-client",{display_name:$("viewerName").value});
+      regionFilter=0;closeDialog();await poll();
+    }catch(err){dialogError(err)}
+    finally{$("connectClientBtn").disabled=false}
+  });
   $("queryForm").addEventListener("submit",async e=>{
     e.preventDefault();
     $("connectBtn").disabled=true;
