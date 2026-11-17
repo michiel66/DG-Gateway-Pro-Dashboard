@@ -1,0 +1,80 @@
+name: Bouw blauwe kaart demo (zonder TeamSpeak)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "demo/**"
+      - "demo_launcher.py"
+      - ".github/workflows/windows-demo.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dg-blue-demo-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  demo:
+    name: Demo controleren en Windows-EXE maken
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Controleer demo code en 12 provincies
+        shell: pwsh
+        run: |
+          python -m py_compile demo_launcher.py
+          node --check demo/demo.js
+          if (-not (Test-Path "demo/index.html")) { throw "Ontbrekend demo HTML" }
+          if (-not (Test-Path "demo/demo.css")) { throw "Ontbrekende CSS" }
+          if (-not (Test-Path "demo/demo.js")) { throw "Ontbrekende JavaScript" }
+          if (-not (Test-Path "demo/assets/nl-blue-background.jpg")) {
+            throw "Kaartachtergrond niet aanwezig"
+          }
+
+      - name: Installeer de Windows demonstratie-omgeving
+        run: python -m pip install "pywebview>=5.3,<7" "pyinstaller>=6.10,<7"
+
+      - name: Bouw zelfstandige Windows demo
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name DG-Gateway-Pro-Blauwe-Kaart-Demo --add-data "demo;demo" --collect-all webview demo_launcher.py
+          if (-not (Test-Path "dist/DG-Gateway-Pro-Blauwe-Kaart-Demo.exe")) {
+            throw "Windows-EXE ontbreekt"
+          }
+
+      - name: Maak demo download met Windows-EXE en browser-preview
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "release/DG-Gateway-Pro-Kaart-Demo" | Out-Null
+          Copy-Item "dist/DG-Gateway-Pro-Blauwe-Kaart-Demo.exe" "release/DG-Gateway-Pro-Kaart-Demo/"
+          Copy-Item -Recurse "demo" "release/DG-Gateway-Pro-Kaart-Demo/browser-demo"
+          @"
+          DG GATEWAY PRO - BLAUWE KAART DEMO
+
+          1. Start DG-Gateway-Pro-Blauwe-Kaart-Demo.exe op Windows.
+          2. Of open browser-demo/index.html in je browser (offline).
+          3. De groene markers zijn een visuele DEMONSTRATIE.
+          4. Klik op 'Indeling aanpassen' om panelen en markers te verslepen.
+          5. Klik op 'Posities herstellen' voor de standaardindeling.
+
+          LET OP: deze demo maakt GEEN TeamSpeak-verbinding.
+          "@ | Out-File "release/DG-Gateway-Pro-Kaart-Demo/LEESMIJ.txt" -Encoding utf8
+          Get-FileHash "dist/DG-Gateway-Pro-Blauwe-Kaart-Demo.exe" -Algorithm SHA256 |
+            Format-List | Out-File "release/DG-Gateway-Pro-Kaart-Demo/SHA256.txt"
+
+      - name: Upload Windows en browserdemo
+        uses: actions/upload-artifact@v4
+        with:
+          name: DG-Gateway-Pro-Blauwe-Kaart-Demo
+          path: release/DG-Gateway-Pro-Kaart-Demo/
+          retention-days: 90
+          if-no-files-found: error
