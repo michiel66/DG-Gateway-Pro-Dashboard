@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>DG Gateway Pro — Windows Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="dashboard" id="dashboard">
+  <header class="masthead neon-border">
+    <div class="branding">
+      <svg class="mast-icon" viewBox="0 0 60 64" aria-hidden="true"><use href="#tower"></use></svg>
+      <div class="brand-copy">
+        <div class="brand-title">DG GATEWAY <span>PRO</span><sup>®</sup></div>
+        <div class="brand-subtitle">Digitale Gateway Regio Netwerk Nederland</div>
+      </div>
+      <div class="flag" title="Nederland" aria-label="Nederlandse vlag"><i></i><i></i><i></i></div>
+    </div>
+    <nav class="top-actions" aria-label="Schermfuncties">
+      <button class="mode-pill" id="modeBtn" title="Verbindingsmethode kiezen"><span class="dot" id="modeDot"></span><span id="modeName">VOORBEELD</span></button>
+      <div class="clock"><span id="date">--</span><strong id="clock">--:--:--</strong></div>
+      <button class="icon-btn" id="settingsBtn" aria-label="Verbinding instellen" title="Verbinding instellen">⚙</button>
+      <button class="icon-btn" id="fullscreenBtn" aria-label="Schermvullend" title="Schermvullend">⛶</button>
+    </nav>
+  </header>
+
+  <div class="toolbar">
+    <div class="modes" role="group" aria-label="Verbindingsmodus">
+      <button class="mode-chip active" data-mode="demo">Voorbeeld</button>
+      <button class="mode-chip" data-mode="android">Met Android</button>
+      <button class="mode-chip" data-mode="query">TeamSpeak direct</button>
+    </div>
+    <span class="toolbar-note" id="sourceNote">VOORBEELDGEGEVENS — nog geen live koppeling</span>
+    <div class="channel-controls" id="channelControls" hidden>
+      <label for="channelSelect">Kanaal</label>
+      <select id="channelSelect"><option value="0">Alle kanalen</option></select>
+    </div>
+  </div>
+
+  <main class="layout">
+    <aside class="left-col">
+      <div class="stat-card panel">
+        <div class="stat-icon">♟</div><div><span class="stat-title">Gebruikers Online</span><strong id="usersCount">0</strong></div>
+      </div>
+      <div class="stat-card panel">
+        <svg class="stat-svg" viewBox="0 0 60 64" aria-hidden="true"><use href="#tower"></use></svg>
+        <div><span class="stat-title">Actieve Regio's</span><strong id="activeCount">0</strong></div>
+      </div>
+      <div class="stat-card panel">
+        <div class="stats-bars">▂▄▆█</div><div><span class="stat-title">DG Groepen</span><strong>12</strong></div>
+      </div>
+      <section class="legend panel">
+        <h3>Legenda Repeater (Regio)</h3>
+        <div><svg class="antenna green" viewBox="0 0 60 64"><use href="#tower"></use></svg><span>Actief (spreekt)</span></div>
+        <div><svg class="antenna blue" viewBox="0 0 60 64"><use href="#tower"></use></svg><span>Stand-by (online)</span></div>
+        <div><svg class="antenna grey" viewBox="0 0 60 64"><use href="#tower"></use></svg><span>Spreekstatus onbekend</span></div>
+        <p id="legendFoot">Virtuele DG-regio's op basis van gebruikersnamen.</p>
+      </section>
+      <section class="panel mini-card">
+        <h3>TeamSpeak-netwerk</h3>
+        <span class="server-address">heerlen.mijnts3.nl</span>
+        <p id="connectionState">Demonstratiemodus: geen verbinding</p>
+      </section>
+    </aside>
+
+    <section class="map-panel">
+      <div class="map-heading"><h1>Nederland</h1><h2>DG Regio Overzicht</h2></div>
+      <div class="map-frame">
+        <div class="contour-rings"></div>
+        <svg id="nlMap" class="nl-map" viewBox="0 0 810 730" role="img" aria-labelledby="mapTitle mapDesc" preserveAspectRatio="xMidYMid meet">
+          <title id="mapTitle">Kaart van de twaalf DG-regio's van Nederland</title>
+          <desc id="mapDesc">Gestileerde, schematische kaart. Marker wordt groen als een echte gekoppelde bron de regio als sprekend meldt.</desc>
+          <defs>
+            <filter id="blueHalo" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="greenHalo" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <linearGradient id="provinceFill" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#102d4c"/><stop offset=".55" stop-color="#05172c"/><stop offset="1" stop-color="#082d4d"/></linearGradient>
+            <linearGradient id="activeFill" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#164f30"/><stop offset="1" stop-color="#042b13"/></linearGradient>
+            <symbol id="tower" viewBox="0 0 60 64">
+              <g fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M27 24L18 59M33 24L42 59M20 52h20M23 42h14M26 32h8M18 59h24"/>
+                <path d="M22 20a11 11 0 0 1 0-16M38 20a11 11 0 0 0 0-16M15 27a21 21 0 0 1 0-30M45 27a21 21 0 0 0 0-30"/>
+                <circle cx="30" cy="18" r="4" fill="currentColor" stroke="none"/>
+              </g>
+            </symbol>
+          </defs>
+          <g id="regions">
+            <g class="region" data-code="110"><path d="M345 126L392 93L468 87L510 110L527 151L493 207L447 229L400 221L357 199L338 166Z"/></g>
+            <g class="region" data-code="109"><path d="M510 110L566 92L624 103L666 139L674 186L634 213L569 211L525 187L526 150Z"/></g>
+            <g class="region" data-code="108"><path d="M528 202L567 211L633 213L649 276L628 330L581 341L526 314L503 259Z"/></g>
+            <g class="region" data-code="100"><path d="M307 178L345 194L361 246L364 301L345 349L327 390L283 429L238 403L209 363L208 304L237 248L272 224Z"/></g>
+            <g class="region" data-code="111"><path d="M370 256L446 225L496 245L518 287L508 342L438 378L375 343L357 303Z"/></g>
+            <g class="region" data-code="107"><path d="M528 325L581 341L629 328L666 372L657 438L627 477L561 465L512 421L505 357Z"/></g>
+            <g class="region" data-code="101"><path d="M352 383L437 374L489 403L491 462L450 494L375 488L335 447Z"/></g>
+            <g class="region" data-code="106"><path d="M496 445L560 453L628 470L642 520L595 573L533 578L474 557L423 505L447 481Z"/></g>
+            <g class="region" data-code="103"><path d="M207 423L283 424L334 448L374 488L356 545L308 570L255 559L219 537L187 505L165 468Z"/></g>
+            <g class="region" data-code="102"><path d="M169 544L226 533L251 564L226 592L190 595L174 614L133 615L117 594L144 572Z M111 624L154 629L157 641L125 643Z M198 618L236 605L252 613L225 632Z"/></g>
+            <g class="region" data-code="104"><path d="M269 565L352 544L419 511L475 554L535 576L586 575L574 605L537 645L466 652L418 644L359 658L304 623L266 605Z"/></g>
+            <g class="region" data-code="105"><path d="M586 578L612 553L639 568L647 598L626 632L643 652L649 679L631 707L606 714L578 677L559 640L573 604Z"/></g>
+          </g>
+          <g id="mapMarkers"></g>
+        </svg>
+        <div class="map-caption" id="mapCaption">Schematische provincies · DG-groepen zijn virtuele TeamSpeak-regio's</div>
+      </div>
+      <div class="map-footer">DG-103 Zuid-Holland wordt groen wanneer een geldige bron meldt dat een gebruiker in DG-103 spreekt.</div>
+    </section>
+
+    <aside class="right-col">
+      <section class="onair panel" id="onAirPanel">
+        <div class="onair-head"><svg class="onair-tower" viewBox="0 0 60 64"><use href="#tower"></use></svg><div><div class="onair-label" id="onairTitle">ACTIEVE TRANSMISSIE</div><div class="onair-region" id="onairRegion">Geen actieve spreker</div><div class="onair-name" id="onairName">—</div></div></div>
+        <div class="vu" id="onairVu"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="onair-warning" id="onairWarning" hidden>Geen realtime spreekstatus beschikbaar via ServerQuery</div>
+      </section>
+      <section class="heard panel">
+        <h3>◴&nbsp; Laatste Gesprekken <small>(Last Heard)</small></h3>
+        <div id="heardList" class="heard-rows"><p class="empty">Geen spreekgegevens beschikbaar</p></div>
+      </section>
+      <section class="groups panel">
+        <h3>☷&nbsp; DG Regio Lijst (Provincies)</h3>
+        <div class="region-columns" id="regionList"></div>
+        <div class="other-group" id="otherGroup">DG-999 &nbsp; Overige gebruikers</div>
+      </section>
+      <section class="users panel">
+        <h3>◉&nbsp; Gebruikers <span id="userFilterText"></span></h3>
+        <div id="userList" class="user-rows"><p class="empty">Geen gebruikers</p></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="footer neon-border">
+    <strong><svg viewBox="0 0 60 64" aria-hidden="true"><use href="#tower"></use></svg> DG Gateway Pro<sup>®</sup></strong>
+    <p>DG-groepen zijn regiogroepen gekoppeld aan <em>TeamSpeak heerlen.mijnts3.nl</em></p>
+  </footer>
+</div>
+
+<div id="dialogBackdrop" class="dialog-backdrop" hidden>
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+    <button class="dialog-close" id="closeDialog" aria-label="Sluiten">✕</button>
+    <h2 id="dialogTitle">Verbinding kiezen</h2>
+    <div class="dialog-tabs" role="group" aria-label="Kies methode">
+      <button data-dialog-tab="demo">Voorbeeld</button>
+      <button data-dialog-tab="android">Met Android</button>
+      <button data-dialog-tab="query">TeamSpeak direct</button>
+    </div>
+    <div id="dialogDemo" class="dialog-view">
+      <p>Bekijk eerst ons gekozen Nederland-dashboard. <strong>Dit zijn voorbeeldgegevens, geen echte TeamSpeak-gebruikers of transmissies.</strong></p>
+      <button class="primary" id="activateDemo">Voorbeeld-dashboard openen</button>
+    </div>
+    <div id="dialogAndroid" class="dialog-view" hidden>
+      <p>Elke Windows-start krijgt een nieuwe QR-code én zescijferige koppelcode. De Windows-ontvanger is voorbereid, maar <strong>DG Gateway Pro Android 2.0.2 kan nog niet koppelen.</strong></p>
+      <img id="qrImage" alt="QR-code om later een Android-portofoon met Windows te koppelen" class="qr-img">
+      <div class="pairing-code" id="pairCode">------</div>
+      <div class="pairing-details" id="pairInfo"></div>
+      <div class="info-note">Voor later: beide apparaten op hetzelfde wifi-netwerk, versleutelde HTTPS-verbinding en eenmalige code. Koppelstatus wordt niet gesimuleerd.</div>
+      <button class="primary" id="activateAndroid">Android-koppelmodus openen</button>
+    </div>
+    <form id="queryForm" class="dialog-view" hidden>
+      <p>Deze modus leest **alleen met toestemming van de beheerder** via TeamSpeak 3 <strong>ServerQuery</strong> gebruikers en kanalen uit. Het is geen normale voice-client; er is geen geluid of microfoon.</p>
+      <div class="form-grid">
+        <label>Weergavenaam<input id="displayName" placeholder="Michiel" maxlength="40" autocomplete="off"></label>
+        <label>TeamSpeak-server<input id="queryHost" value="heerlen.mijnts3.nl" required></label>
+        <label>ServerQuery-poort<input id="queryPort" type="number" value="10011" min="1" max="65535"></label>
+        <label>Voice-serverpoort<input id="voicePort" type="number" value="9987" min="1" max="65535"></label>
+        <label>ServerQuery-login<input id="queryLogin" autocomplete="off" placeholder="Alleen-lezen account"></label>
+        <label>ServerQuery-wachtwoord<input id="queryPassword" type="password" autocomplete="off" placeholder="Wordt niet opgeslagen"></label>
+      </div>
+      <p class="warning">Inloggegevens voor de standaard ServerQuery-telnetpoort zijn niet end-to-end versleuteld. Gebruik bij voorkeur een vertrouwde verbinding en een account met uitsluitend leesrechten.</p>
+      <button type="submit" class="primary" id="connectBtn">Verbinden zonder audio</button>
+      <button type="button" class="secondary" id="returnDemo">Terug naar voorbeeld</button>
+    </form>
+    <div class="dialog-error" id="dialogError" role="alert" hidden></div>
+  </section>
+</div>
+
+<!-- Shared SVG symbol: hidden from layout, reusable by antennas in the panels. -->
+<svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true">
+  <defs><symbol id="tower" viewBox="0 0 60 64">
+    <g fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M27 24L18 59M33 24L42 59M20 52h20M23 42h14M26 32h8M18 59h24"/>
+      <path d="M22 20a11 11 0 0 1 0-16M38 20a11 11 0 0 0 0-16M15 27a21 21 0 0 1 0-30M45 27a21 21 0 0 0 0-30"/>
+      <circle cx="30" cy="18" r="4" fill="currentColor" stroke="none"/>
+    </g>
+  </symbol></defs>
+</svg>
+<script src="/app.js"></script>
+</body>
+</html>
