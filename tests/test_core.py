@@ -8,6 +8,8 @@ import unittest
 from unittest.mock import patch
 
 import app
+from channel_observers import ChannelObserver, ChannelObservers, MAX_OBSERVERS
+from direct_client import identity_path
 
 
 class DGTests(unittest.TestCase):
@@ -177,6 +179,63 @@ class DGTests(unittest.TestCase):
         self.assertEqual(ended["heard"][0]["name"], "DG-103 Ruud")
         dashboard.handle_client_event(viewer, {"type": "disconnected", "reason": "Test klaar"})
         self.assertFalse(dashboard.snapshot()["connected"])
+
+    def test_explicit_observers_are_off_by_default(self):
+        st=app.DashboardState()
+        self.assertFalse(st.observers.enabled)
+        self.assertFalse(st.snapshot()["observers"]["enabled"])
+        self.assertEqual(MAX_OBSERVERS, 8)
+        with self.assertRaises(ValueError):
+            identity_path("../attack")
+        self.assertNotEqual(identity_path(), identity_path("channel-7"))
+
+    def test_multiple_real_channel_observers_switch_and_track_rx(self):
+        state=app.DashboardState()
+        state.mode="client"
+        state.connected=True
+        state.speaker_data=True
+        state.client_viewer=object()
+        state.client_channel=7
+        state.channels=[{"id":7,"name":"Algemeen"},{"id":8,"name":"Regio Oost"}]
+        state.users=[
+            {"id":"3","name":"DG-103 Ruud","region":103,"channel_id":7,"speaking":False},
+            {"id":"4","name":"DG-104 Marcel","region":104,"channel_id":8,"speaking":False},
+        ]
+        pool=state.observers
+        obs=ChannelObserver(pool,8)
+        sent=[]
+        obs.viewer.send=lambda command: sent.append(command)
+        with pool.lock:
+            pool.enabled=True
+            pool.observers[8]=obs
+        self.assertEqual(pool._targets()[0],[8])
+        # New viewer starts in the default TS channel, then moves to CID 8.
+        obs.handle_client_event(obs.viewer,{"type":"channels","own_client_id":99,"clients":[
+            {"id":99,"channel":7}
+        ]})
+        self.assertEqual(sent,["switch 8"])
+        obs.handle_client_event(obs.viewer,{"type":"channels","own_client_id":99,"clients":[
+            {"id":99,"channel":8}
+        ]})
+        obs.handle_client_event(obs.viewer,{"type":"talkers","clients":[4,99]})
+        view=state.snapshot()
+        self.assertTrue(view["observers"]["complete"])
+        self.assertEqual(view["talk_scope"],"zichtbare_kanalen")
+        self.assertEqual(len(view["active_users"]),1)
+        self.assertEqual(view["active_users"][0]["name"],"DG-104 Marcel")
+        self.assertTrue(next(g for g in view["groups"] if g["code"] == 104)["active"])
+        obs.handle_client_event(obs.viewer,{"type":"talkers","clients":[]})
+        ended=state.snapshot()
+        self.assertEqual(ended["active_users"],[])
+        self.assertEqual(ended["heard"][0]["name"],"DG-104 Marcel")
+        # If a third occupied channel exists, coverage must say PARTIAL.
+        state.channels.append({"id":9,"name":"Regio West"})
+        state.users.append({"id":"5","name":"DG-100 Peter","region":100,
+                            "channel_id":9,"speaking":False})
+        self.assertEqual(state.snapshot()["talk_scope"],"gedeeltelijk")
+        with pool.lock:
+            pool.observers.clear()
+            pool.enabled=False
 
     def test_tls_certificate_has_fingerprint(self):
         from cryptography import x509
