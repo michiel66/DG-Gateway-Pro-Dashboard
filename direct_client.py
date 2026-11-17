@@ -41,28 +41,31 @@ def connector_path() -> Path:
     return next((c for c in choices if c.is_file()), choices[0])
 
 
-def identity_path() -> Path:
-    """App-private profile, not a GitHub secret or any server-side credential."""
+def identity_path(scope: str = "") -> Path:
+    """Separate identity per monitored channel, keeping the main identity safe."""
+    if scope and not re.fullmatch(r"channel-\d{1,12}", scope):
+        raise ValueError("Ongeldige identiteitsnaam voor kanaalbewaker.")
     if os.name == "nt":
         base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
     else:
         base = Path.home() / ".local" / "share"
-    return base / "DG-Gateway-Pro-Dashboard" / IDENTITY_FILE
+    name = IDENTITY_FILE if not scope else f"dashboard-{scope}.json"
+    return base / "DG-Gateway-Pro-Dashboard" / name
 
 
-def load_identity() -> str:
+def load_identity(scope: str = "") -> str:
     try:
-        value = json.loads(identity_path().read_text(encoding="utf-8"))
+        value = json.loads(identity_path(scope).read_text(encoding="utf-8"))
         token = value.get("identity", "")
         return token if isinstance(token, str) and len(token) < 20000 else ""
     except (OSError, ValueError, TypeError):
         return ""
 
 
-def store_identity(token: str):
+def store_identity(token: str, scope: str = ""):
     if not isinstance(token, str) or not token or len(token) > 20000:
         return
-    p = identity_path()
+    p = identity_path(scope)
     p.parent.mkdir(parents=True, exist_ok=True)
     temp = p.with_suffix(".tmp")
     temp.write_text(json.dumps({"identity": token}), encoding="utf-8")
@@ -76,9 +79,10 @@ def store_identity(token: str):
 class DirectViewer:
     """Owns one muted voice-protocol connection, never any microphone/speaker."""
 
-    def __init__(self, state, server: str = DEFAULT_SERVER):
+    def __init__(self, state, server: str = DEFAULT_SERVER, identity_scope: str = ""):
         self.state = state
         self.server = server
+        self.identity_scope = identity_scope
         self.stopping = threading.Event()
         self.process = None
         self.write_lock = threading.Lock()
@@ -130,7 +134,7 @@ class DirectViewer:
 
     def _run(self, exe: Path, nickname: str):
         env = os.environ.copy()
-        identity = load_identity()
+        identity = load_identity(self.identity_scope)
         if identity:
             env["TS_IDENTITY"] = identity
         opts = {
@@ -157,7 +161,7 @@ class DirectViewer:
                         continue
                     if event.get("type") == "connected":
                         # Native engine sends the initial identity; persist on disk for TS rights.
-                        store_identity(event.get("identity", ""))
+                        store_identity(event.get("identity", ""), self.identity_scope)
                         # Force a muted TS3 identity in addition to not opening a mic.
                         # Do not mute output in TS protocol: incoming packets carry
                         # speaking activity, but PCM is discarded inside Rust.
