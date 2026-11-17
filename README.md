@@ -1,3 +1,17 @@
+# Blauwe Nederlandkaart — nieuwe fullscreen DEMO
+
+**De nieuwe demo is klaar om te beoordelen; TeamSpeak-verbindingen volgen later.**
+De complete visuele demo heeft de gekozen blauwe Nederlandkaart als achtergrond,
+12 losse DG-regiomarkers, een gebruikerslijst links, voorbeeld-RX/TX, Last Heard
+en verplaatsbare panelen. De kaartdemo gebruikt **geen echte TeamSpeak-data**.
+
+**[Download de Windows demo](https://github.com/michiel66/DG-Gateway-Pro-Dashboard/actions/workflows/windows-demo.yml)**
+of lees de [demo-handleiding](demo/README.md).
+De eerdere TeamSpeak-versie is veilig bewaard in
+[`backup-live-teamSpeak-2026-11-17`](https://github.com/michiel66/DG-Gateway-Pro-Dashboard/tree/backup-live-teamSpeak-2026-11-17).
+
+---
+
 # DG Gateway Pro — Windows Dashboard
 
 **Onafhankelijk TeamSpeak Regio Netwerk Nederland.** Windows-viewer zonder geluid of PTT. **Los van de werkende Android-app** in [DMR-Gateway-Pro](https://github.com/michiel66/DMR-Gateway-Pro).
