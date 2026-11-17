@@ -8,11 +8,18 @@ on:
 permissions:
   contents: read
 
+# Avoid costly parallel Rust builds when a newer fix is pushed.
+concurrency:
+  group: dg-windows-viewer-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows:
     name: Test and build Windows exe
     runs-on: windows-latest
     timeout-minutes: 110
+    env:
+      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
     steps:
       - name: Checkout Windows viewer project
         uses: actions/checkout@v4
