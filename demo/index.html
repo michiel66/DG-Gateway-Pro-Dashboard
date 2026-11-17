@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#03172e">
+  <title>DG Gateway Pro — Blauwe kaart demo</title>
+  <link rel="stylesheet" href="demo.css">
+</head>
+<body>
+<main class="screen" id="screen" aria-label="DG Gateway Pro demo dashboard">
+  <!-- The artist-created blue Netherlands background is NOT modified by the app.
+       All names, counters, markers, buttons and status boxes are separate overlays. -->
+  <div class="screen-photo" role="img" aria-label="Blauwe kaart Nederland met leeg zijpaneel"></div>
+  <div class="map-cover" aria-hidden="true"></div>
+
+  <header class="brand" data-layout="brand">
+    <div class="brand-title"><span class="brand-icon">⌁</span>DG GATEWAY <em>PRO</em></div>
+    <div class="brand-subtitle">TEAM<span>SPEAK</span> NEDERLAND · MONITOR</div>
+  </header>
+
+  <section class="sidebar" aria-label="Dashboard instellingen en regio's">
+    <div class="demo-ribbon"><span class="pulse-dot"></span> DEMONSTRATIE <small>GEEN LIVE VERBINDING</small></div>
+    <div class="server-panel">
+      <div class="server-label">TEAM<span>SPEAK</span> NETWERK</div>
+      <div class="server-line"><span class="server-pill">heerlen.mijnts3.nl</span><span class="status-off">OFFLINE</span></div>
+      <div class="server-note">TeamSpeak-koppeling volgt later</div>
+    </div>
+    <div class="summary">
+      <div class="metric"><span>Gebruikers online</span><strong id="onlineCount">0</strong></div>
+      <div class="metric"><span>Kanalen met gebruikers</span><strong id="channelCount">0</strong></div>
+      <div class="metric"><span>Regio's in gesprek</span><strong class="green" id="activeCount">0</strong></div>
+    </div>
+    <div class="sidebar-title">DG REGIO'S <span>VOORBEELD</span></div>
+    <div id="regionList" class="region-list"></div>
+    <div class="sidebar-bottom">
+      <div class="rx-indicator"><span class="rx-circle"></span><span id="radioStatus">DEMO RX/TX STAND-BY</span></div>
+      <div class="clock-line"><span>Lokale tijd</span><strong id="time">--:--:--</strong></div>
+    </div>
+  </section>
+
+  <div class="map-notice" data-layout="mapNotice">
+    <span class="small-tag">DEMO</span>
+    <span id="bannerText">Kaartmarkers tonen voorbeeldactiviteit</span>
+  </div>
+
+  <!-- Separate dynamically generated location indicators; never baked into map image -->
+  <div class="markers" id="markers" aria-label="Interactieve DG-regio-markeringen"></div>
+
+  <section class="lastheard movable" data-layout="lastheard" aria-label="Last Heard">
+    <div class="floating-head drag-handle"><span>◉ &nbsp;LAATSTE GESPREKKEN</span><small>VOORBEELD</small></div>
+    <div id="heardList" class="heard-list"></div>
+  </section>
+  <section class="livecard movable" data-layout="livecard">
+    <div class="floating-head drag-handle"><span>⌁ &nbsp;ACTIEVE TRANSMISSIE</span><small>DEMO</small></div>
+    <div id="liveName" class="live-name">Niemand spreekt</div>
+    <div id="liveRegion" class="live-region">Stand-by</div>
+    <div class="bars" id="bars" aria-hidden="true"></div>
+  </section>
+
+  <section class="toolbar" data-layout="toolbar" aria-label="Demobediening">
+    <span class="demo-mark">DEMO</span>
+    <button id="playBtn" class="primary">▶ Demo starten</button>
+    <button id="nextBtn">↪ Volgende spreker</button>
+    <button id="editBtn" aria-pressed="false">⌖ Indeling aanpassen</button>
+    <button id="resetBtn" title="Alle panelen naar de standaardpositie">↶ Posities herstellen</button>
+    <span id="editHint">Klik op een DG-marker om een voorbeeldgesprek te starten</span>
+  </section>
+</main>
+<script src="demo.js"></script>
+</body>
+</html>
