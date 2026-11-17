@@ -24,6 +24,7 @@ import sys
 import tempfile
 import threading
 import time
+from direct_client import DirectViewer, display_nickname
 from urllib.parse import urlparse, parse_qs
 
 
@@ -178,11 +179,23 @@ class DashboardState:
         self.pair_qr = ""
         self.pair_error = ""
         self.query_config = None
+        self.client_viewer = None
+        self.client_talking = set()
+        self.client_own_id = 0
+        self.client_channel = 0
+
+    def stop_client(self):
+        with self.lock:
+            viewer = self.client_viewer
+            self.client_viewer = None
+        if viewer is not None:
+            viewer.stop()
 
     def set_mode(self, mode: str):
-        if mode not in {"demo", "query", "android"}:
+        if mode not in {"demo", "query", "android", "client"}:
             raise ValueError("Onbekende verbindingsmethode.")
         self.stop_query()
+        self.stop_client()
         with self.lock:
             self.mode = mode
             self.users = []
@@ -193,6 +206,10 @@ class DashboardState:
             self.connected = False
             self.error = ""
             self.channel_filter = 0
+            self.client_talking = set()
+            self.client_own_id = 0
+            self.client_channel = 0
+            self.speaking_started = {}
 
     def stop_query(self):
         self.query_stop.set()
@@ -201,6 +218,7 @@ class DashboardState:
             self.generation += 1
 
     def connect_query(self, payload: dict):
+        self.stop_client()
         host = clean_text(payload.get("host") or SERVER, 200)
         if not re.fullmatch(r"[a-zA-Z0-9.:_-]{1,200}", host):
             raise ValueError("Ongeldig serveradres.")
@@ -268,6 +286,119 @@ class DashboardState:
         self.query_thread = threading.Thread(target=loop, daemon=True, name="serverquery-reader")
         self.query_thread.start()
 
+
+    def connect_client(self, payload: dict):
+        """A real, muted TS3 client; no TeamSpeak installation or ServerQuery password."""
+        name = clean_text(payload.get("display_name"), 16)
+        display_nickname(name)  # Validate before changing the existing state.
+        viewer = DirectViewer(self, SERVER)
+        # Confirm the native viewer exists BEFORE dropping any existing connection.
+        if not viewer_available():
+            raise ValueError("De TeamSpeak-connector ontbreekt. Download de nieuwste Windows-build.")
+        self.set_mode("client")
+        with self.lock:
+            self.client_viewer = viewer
+            self.display_name = name
+            self.error = "TeamSpeak-verbinding wordt gestart..."
+            self.query_config = None
+        try:
+            viewer.start(name)
+        except (RuntimeError, OSError, ValueError):
+            with self.lock:
+                self.client_viewer = None
+            raise
+
+    def handle_client_event(self, viewer, event: dict):
+        """Validated TeamSpeak connector events. No user-generated sample data."""
+        with self.lock:
+            if self.mode != "client" or self.client_viewer is not viewer:
+                return
+            kind = event.get("type")
+            if kind == "connected":
+                self.error = ""
+                self.updated_at = time.time()
+            elif kind == "channels":
+                self.client_own_id = int(event.get("own_client_id") or 0)
+                raw_clients = event.get("clients") or []
+                self.client_channel = 0
+                clients = []
+                for client in raw_clients[:300]:
+                    if not isinstance(client, dict):
+                        continue
+                    uid = int(client.get("id") or 0)
+                    if uid == self.client_own_id:
+                        self.client_channel = int(client.get("channel") or 0)
+                        continue
+                    if client.get("is_query"):
+                        continue
+                    nickname = clean_text(client.get("name"), 90)
+                    # Other Windows viewers should not appear among ordinary DG-999 users.
+                    if not nickname or nickname.lower().startswith("dashboardview/"):
+                        continue
+                    clients.append({
+                        "id": str(uid), "name": nickname,
+                        "region": region_for(nickname),
+                        "channel_id": int(client.get("channel") or 0),
+                        "speaking": uid in self.client_talking,
+                    })
+                self.users = clients
+                self.channels = [
+                    {"id": int(ch.get("id") or 0), "name": clean_text(ch.get("name"), 80)}
+                    for ch in (event.get("channels") or [])[:300] if isinstance(ch, dict)
+                ]
+                self.connected = True
+                self.speaker_data = True
+                self.updated_at = time.time()
+                self.error = ""
+            elif kind == "talkers":
+                old = self.client_talking
+                self.client_talking = {int(uid) for uid in (event.get("clients") or [])[:300] if isinstance(uid, int)}
+                self.client_talking.discard(self.client_own_id)
+                now = time.monotonic()
+                stamp = datetime.now().astimezone().strftime("%H:%M:%S")
+                names_by_id = {int(user["id"]): user for user in self.users}
+                for uid in old - self.client_talking:
+                    old_spk = self.speaking_started.pop(str(uid), None)
+                    if old_spk:
+                        name, started = old_spk
+                        secs = max(0, int(now-started))
+                        self.heard.insert(0, {
+                            "name": name, "region": region_for(name), "time": stamp,
+                            "duration": f"{secs//60:02d}:{secs%60:02d}",
+                        })
+                for uid in self.client_talking - old:
+                    if uid in names_by_id:
+                        self.speaking_started[str(uid)] = (names_by_id[uid]["name"], now)
+                self.heard = self.heard[:40]
+                for user in self.users:
+                    user["speaking"] = int(user["id"]) in self.client_talking
+                self.updated_at = time.time()
+            elif kind == "reconnecting":
+                self.connected = False
+                self.speaker_data = False
+                self.error = "TeamSpeak herverbindt..."
+            elif kind == "reconnected":
+                self.error = ""
+            elif kind == "disconnected":
+                self.connected = False
+                self.speaker_data = False
+                self.users = []
+                self.channels = []
+                self.client_talking = set()
+                self.speaking_started = {}
+                self.error = clean_text(event.get("reason") or "TeamSpeak is verbroken.", 160)
+            elif kind == "error":
+                self.error = clean_text(event.get("message") or "TeamSpeak-fout.", 170)
+
+    def join_client_channel(self, cid: int):
+        with self.lock:
+            viewer = self.client_viewer
+            allowed = self.mode == "client" and self.connected and cid in [c["id"] for c in self.channels]
+        if not allowed or viewer is None:
+            raise ValueError("Maak eerst verbinding en selecteer een geldig TeamSpeak-kanaal.")
+        viewer.send("switch " + str(cid))
+
+
     def ingest_android(self, payload: dict):
         users = []
         talking = set()
@@ -329,7 +460,8 @@ class DashboardState:
                 "mode": mode, "connected": mode == "demo" or self.connected,
                 "demo": mode == "demo", "error": self.error, "server": SERVER,
                 "users": shown, "all_users_count": len(users), "channels": channels,
-                "selected_channel": selected, "groups": groups,
+                "selected_channel": self.client_channel if mode == "client" else selected,
+                "groups": groups,
                 "heard": heard if talk_data else [], "speaker_data": talk_data,
                 "active_users": active, "updated_at": self.updated_at,
                 "pair": {
@@ -343,6 +475,11 @@ class DashboardState:
                 "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
             }
             return info
+
+
+def viewer_available() -> bool:
+    from direct_client import connector_path
+    return connector_path().is_file()
 
 
 STATE = DashboardState()
@@ -415,18 +552,23 @@ class LocalHandler(BaseHTTPRequestHandler):
                 STATE.set_mode(str(data.get("mode")))
             elif p == "/api/connect":
                 STATE.connect_query(data)
+            elif p == "/api/connect-client":
+                STATE.connect_client(data)
             elif p == "/api/disconnect":
                 STATE.set_mode("demo")
             elif p == "/api/channel":
                 channel = int(data.get("id") or 0)
-                with STATE.lock:
-                    if channel and channel not in [ch["id"] for ch in STATE.channels] and STATE.mode != "demo":
-                        raise ValueError("Dit kanaal bestaat niet.")
-                    STATE.channel_filter = channel
+                if STATE.mode == "client":
+                    STATE.join_client_channel(channel)
+                else:
+                    with STATE.lock:
+                        if channel and channel not in [ch["id"] for ch in STATE.channels] and STATE.mode != "demo":
+                            raise ValueError("Dit kanaal bestaat niet.")
+                        STATE.channel_filter = channel
             else:
                 return json_reply(self, 404, {"error": "Niet gevonden"})
             return json_reply(self, 200, {"ok": True})
-        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        except (ValueError, TypeError, RuntimeError, json.JSONDecodeError) as exc:
             return json_reply(self, 400, {"error": clean_text(exc, 160)})
 
 
@@ -618,6 +760,7 @@ def run():
         webview.start(debug=False)
     finally:
         STATE.stop_query()
+        STATE.stop_client()
         local.shutdown()
         if pair:
             pair.shutdown()
